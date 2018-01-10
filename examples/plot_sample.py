@@ -22,17 +22,38 @@ evokeds = [left, right, contrast]
 # Create template
 template_left = left.copy().crop(0.05, 0.15).data.mean(axis=1)
 template_right = right.copy().crop(0.05, 0.15).data.mean(axis=1)
+template_contrast = template_left - template_right
 
-# Filter the data to extract only the left beeps
-X = epochs.get_data().transpose(0, 2, 1).reshape(-1, epochs.info['nchan'])
+
+def make_X(epochs):
+    X = epochs.get_data().transpose(0, 2, 1).reshape(-1, epochs.info['nchan'])
+    return X
+
+
+X = make_X(epochs)
+X_left = make_X(epochs['left'])
+X_right = make_X(epochs['right'])
+
 filter_left = LCMV(template_left).fit(X)
+filter_right = LCMV(template_right).fit(X)
+filter_contrast = LCMV(template_contrast).fit(X)
 
-X_left = epochs['left'].get_data().transpose(0, 2, 1).reshape(-1, epochs.info['nchan'])
-X_right = epochs['right'].get_data().transpose(0, 2, 1).reshape(-1, epochs.info['nchan'])
+X_left_left = filter_left.predict(X_left)
+X_left_right = filter_left.predict(X_right)
+X_right_left = filter_right.predict(X_left)
+X_right_right = filter_right.predict(X_right)
+X_contrast_left = filter_contrast.predict(X_left)
+X_contrast_right = filter_contrast.predict(X_right)
 
-X_left_filt = filter_left.predict(X_left)
-X_right_filt = filter_left.predict(X_right)
+fig, axes = plt.subplots(1, 3, figsize=(10, 3))
+axes[0].plot(X_left_left.reshape(len(epochs['left']), -1).mean(axis=0))
+axes[0].plot(X_left_right.reshape(len(epochs['right']), -1).mean(axis=0))
+axes[0].set_title('Filtered for left')
 
-plt.figure()
-plt.plot(X_left_filt.reshape(len(epochs['left']), -1).mean(axis=0))
-plt.plot(X_right_filt.reshape(len(epochs['right']), -1).mean(axis=0))
+axes[1].plot(X_right_left.reshape(len(epochs['left']), -1).mean(axis=0))
+axes[1].plot(X_right_right.reshape(len(epochs['right']), -1).mean(axis=0))
+axes[1].set_title('Filtered for right')
+
+axes[2].plot(X_contrast_left.reshape(len(epochs['left']), -1).mean(axis=0))
+axes[2].plot(X_contrast_right.reshape(len(epochs['right']), -1).mean(axis=0))
+axes[2].set_title('Filtered for contrast')
