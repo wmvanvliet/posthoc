@@ -6,8 +6,7 @@ from nose.tools import assert_true, assert_greater
 from sklearn.linear_model import LinearRegression, Ridge
 import numpy as np
 
-from methods.workbench import Workbench
-from methods.cov_updaters import ShrinkageUpdater
+from workbench import Workbench, ShrinkageUpdater
 
 
 def _gen_data(noise_scale=2, zero_mean=False):
