@@ -20,6 +20,7 @@ build
 *#
 *.toc
 .doit*
+*.egg-info
 doc/_build
 doc/auto_examples
 doc/generated
