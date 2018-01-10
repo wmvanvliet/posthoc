@@ -21,27 +21,24 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     normalize : bool (default: True)
         Whether to normalize (std. dev = 1) the data before fitting the
         beamformer. Can make the filter more robust.
-    cov_i : 2D array (n_channels, n_channels) | None
-        The inverse spatio-temporal covariance matrix of the data. Use this to
-        avoid re-computing it during fitting. When this parameter is set, the
-        ``reg`` parameter is ignored.
 
     Attributes
     ----------
     coef_ : 1D array (n_channels * n_samples,)
         Vector containing the filter weights.
     '''
-    def __init__(self, template, reg=0, center=True, normalize=True,
-                 solver='auto'):
+    def __init__(self, template, shrinkage=0, center=True, normalize=True):
         if template.ndim == 1:
             self.template = template[:, np.newaxis]
         else:
             self.template = template
+        if self.template.shape[1] != 1:
+            raise ValueError('The template should have shape (n_features,) or '
+                             '(n_features, 1).')
 
-        self.reg = reg
+        self.shrinkage = shrinkage
         self.center = center
         self.normalize = normalize
-        self.solver = solver
         self.fit_intercept = self.center
 
     def fit(self, X, y=None):
@@ -65,7 +62,7 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
 
         cov = X.T.dot(X)
         scale = np.trace(cov) / len(cov)
-        cov *= 1 - self.alpha
+        cov *= 1 - self.shrinkage
         cov.flat[::n_features + 1] += self.shrinkage * scale
         cov_i = np.linalg.pinv(cov)
         self.coef_ = cov_i.dot(self.template).ravel()
