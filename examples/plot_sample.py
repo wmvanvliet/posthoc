@@ -35,7 +35,7 @@ evokeds = [left, right, contrast]
 template_left = left.copy().crop(0.05, 0.15).data.mean(axis=1)
 template_right = right.copy().crop(0.05, 0.15).data.mean(axis=1)
 template_contrast = template_left - template_right
-templates = np.array([template_left, template_right, template_contrast])
+templates = [template_left, template_right, template_contrast]
 
 
 def make_X(epochs):
@@ -48,7 +48,9 @@ X = make_X(epochs)
 X_left = make_X(epochs['left'])
 X_right = make_X(epochs['right'])
 
-# Design spatial filters using the different templates
+# Design spatial filters using the different templates. We can give all the
+# templates at once to the LCMV object: it will create separate filters for
+# each template.
 beamformer = LCMV(templates).fit(X)
 
 # Apply the filters to the left-beep and right-beep data repectively

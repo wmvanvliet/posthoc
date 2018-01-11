@@ -78,6 +78,7 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     '''
     def __init__(self, template, center=True, normalize=True, cov_modifier=None,
                  cov_updater=None, normalizer_modifier=None, method='auto'):
+        template = np.asarray(template)
         if template.ndim == 1:
             self.template = template[np.newaxis, :]
         else:
