@@ -9,7 +9,6 @@ presented with audio beeps on either the left or right side of the head.
 The filter will attempt to isolate the timecourse of the auditory evoked
 potential.
 """
-import numpy as np
 import mne
 from workbench import LCMV
 from matplotlib import pyplot as plt
@@ -39,7 +38,7 @@ templates = [template_left, template_right, template_contrast]
 
 
 def make_X(epochs):
-    """Construct an n_samples x n_channels matrix X from an mne.Epochs object."""
+    """Construct an n_samples x n_channels matrix from an mne.Epochs object."""
     X = epochs.get_data().transpose(0, 2, 1).reshape(-1, epochs.info['nchan'])
     return X
 
