@@ -76,8 +76,9 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     coef_ : ndarray, shape (n_channels * n_samples, n_signals)
         The filter weights.
     '''
-    def __init__(self, template, center=True, normalize=True, cov_modifier=None,
-                 cov_updater=None, normalizer_modifier=None, method='auto'):
+    def __init__(self, template, center=True, normalize=False,
+                 cov_modifier=None, cov_updater=None, normalizer_modifier=None,
+                 method='auto'):
         template = np.asarray(template)
         if template.ndim == 1:
             self.template = template[np.newaxis, :]
