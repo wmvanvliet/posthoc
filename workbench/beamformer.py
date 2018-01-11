@@ -9,13 +9,13 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     '''An LCMV beamformer filter.
 
     A beamformer filter attempts to isolate a specific signal in the data. The
-    signal of interest is specified as an activation pattern. The linearly
+    signal of interest is specified as an activation template. The linearly
     constrained minimum variance (LCMV) beamformer attemps to minimize the
     overall variance of the output while not reducing the variance of the
     signal of interest.
 
     By default, a 'unit-gain' LCMV beamformer is used, that passes a signal
-    conforming to the given pattern with unit gain (self.coef_ @ pattern == I).
+    conforming to the given template with unit gain (self.coef_ @ template == I).
     Other types of beamformers can be constructed by using the
     `normalizer_modifier` parameter.
 
@@ -33,8 +33,8 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
 
     Parameters
     ----------
-    pattern : ndarray, shape (n_features,) | (n_signals, n_features)
-       Activation pattern(s) of the signal(s) to extract.
+    template : ndarray, shape (n_features,) | (n_signals, n_features)
+       Activation template(s) of the signal(s) to extract.
     center : bool (default: True)
         Whether to remove the data mean before applying the filter.
         WARNING: only set to False if the data has been pre-centered. Applying
@@ -62,7 +62,7 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     normalizer_modifier : function | None
         Function that takes a normalizer (an ndarray of shape (n_targets,
         n_targets)) and modifies it. Must have the signature:
-        `def normalizer_modifier(coef, X, y, pattern, coef)`
+        `def normalizer_modifier(coef, X, y, template, coef)`
         and return the modified normalizer. Defaults to `None`, which means no
         modification of the normalizer.
     method : 'traditional' | 'kernel' | 'auto'
@@ -76,12 +76,12 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     coef_ : ndarray, shape (n_channels * n_samples, n_signals)
         The filter weights.
     '''
-    def __init__(self, pattern, center=True, normalize=True, cov_modifier=None,
+    def __init__(self, template, center=True, normalize=True, cov_modifier=None,
                  cov_updater=None, normalizer_modifier=None, method='auto'):
-        if pattern.ndim == 1:
-            self.pattern = pattern[np.newaxis, :]
+        if template.ndim == 1:
+            self.template = template[np.newaxis, :]
         else:
-            self.pattern = pattern
+            self.template = template
         self.center = center
         self.fit_intercept = self.center
         self.normalize = normalize
@@ -110,17 +110,17 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
         )
 
         # Compute weights
-        coef, _ = compute_weights(X, None, self.pattern, self.cov_modifier,
+        coef, _ = compute_weights(X, None, self.template.T, self.cov_modifier,
                                   self.cov_updater, self.method)
 
         # The default normalizer constructs a unit-gain LCMV beamformer
-        normalizer = [c.dot(p) for c, p in zip(coef, self.pattern)]
+        normalizer = [c.dot(p) for c, p in zip(coef, self.template)]
         normalizer = np.diag(normalizer)
 
         # Modify and apply the normalizer
         if self.normalizer_modifier is not None:
             normalizer = self.normalizer_modifier(normalizer, X, None,
-                                                  self.pattern, coef)
+                                                  self.template.T, coef)
         self.coef_ = normalizer.dot(coef)
 
         # Undo scaling if self.normalize == True
