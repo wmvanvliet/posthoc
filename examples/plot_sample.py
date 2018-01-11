@@ -60,6 +60,10 @@ X_right = beamformer.transform(X_right)
 # Plot the filtered evokeds
 fig, axes = plt.subplots(1, 3, figsize=(12, 3))
 for i, label in enumerate(['left', 'right', 'contrast']):
-    axes[i].plot(X_left[:, i].reshape(len(epochs['left']), -1).mean(axis=0))
-    axes[i].plot(X_right[:, i].reshape(len(epochs['right']), -1).mean(axis=0))
+    evoked_left = X_left[:, i].reshape(len(epochs['left']), -1).mean(axis=0)
+    evoked_right = X_right[:, i].reshape(len(epochs['right']), -1).mean(axis=0)
+    axes[i].plot(epochs.times, evoked_left)
+    axes[i].plot(epochs.times, evoked_right)
+    axes[i].set_xlabel('Time (s)')
     axes[i].set_title('Filtered for %s' % label)
+fig.set_tight_layout(True)
