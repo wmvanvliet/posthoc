@@ -42,7 +42,7 @@ def make_X(epochs):
     X = epochs.get_data().transpose(0, 2, 1).reshape(-1, epochs.info['nchan'])
     return X
 
-
+# Create data matrices in the scikit-learn format
 X = make_X(epochs)
 X_left = make_X(epochs['left'])
 X_right = make_X(epochs['right'])
