@@ -164,8 +164,6 @@ def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
             method = 'traditional'
 
     if method == 'traditional':
-        print('Using method: traditional')
-
         # Compute the covariance of X
         cov_X = X.T.dot(X)
 
@@ -193,8 +191,6 @@ def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
         return coef, cov_X
 
     elif method == 'kernel':
-        print('Using method: kernel')
-
         # Get the covariance updater from the function supplied by the user
         if is_updater(cov_updater):
             # User supplied a CovUpdater object for detailed control
