@@ -36,7 +36,8 @@ def compute_pattern(W, X, return_y_hat=False):
         linear models expose the `.coeff_` attribute after fitting, which is
         the intended input to this function.
     X : nparray, shape (n_samples, n_features)
-        The data. No centering or normalization will be performed on it.
+        The data. No centering or normalization will be performed on it, so be
+        sure this has already been properly done.
     return_y_hat : bool (Default: False)
         Whether to return X @ W.T
 
@@ -73,8 +74,8 @@ def compute_pattern(W, X, return_y_hat=False):
         return pattern
 
 
-def disassemble_model(W, X, return_cov_X=True):
-    '''Disassemble a fitted linear model into cov_X, pattern and a normalizer.
+def disassemble_model(W, X, compute_cov_X=True):
+    '''Disassemble a fitted linear model into cov_X, pattern and normalizer.
 
     Parameters
     ----------
@@ -83,9 +84,10 @@ def disassemble_model(W, X, return_cov_X=True):
         linear models expose the `.coeff_` attribute after fitting, which is
         the intended input to this function.
     X : ndarray, shape (n_samples, n_features)
-        The data. No centering or normalization will be performed on it.
+        The data. No centering or normalization will be performed on it, so be
+        sure this has already been properly done.
     return_cov_X : bool (Default: True)
-        Whether to return cov_X. For the kernel formulation of the workbench,
+        Whether to compute cov_X. For the kernel formulation of the workbench,
         cov_X is not required.
 
     Notes
@@ -97,7 +99,7 @@ def disassemble_model(W, X, return_cov_X=True):
     Returns
     -------
     cov_X : ndarray, shape (n_features, n_features)
-        The covariance of X. Only returned if `return_cov_X=True`.
+        The covariance of X. Only returned if `compute_cov_X=True`.
     pattern : ndarray, shape (n_features, n_targets)
         The pattern obtained by applying the Haufe trick.
     normalizer : ndarray, shape (n_targets, n_targets)
@@ -106,37 +108,47 @@ def disassemble_model(W, X, return_cov_X=True):
     pattern, y_hat = compute_pattern(W, X, return_y_hat=True)
     normalizer = y_hat.T.dot(y_hat)
 
-    if return_cov_X:
+    if compute_cov_X:
         cov_X = X.T.dot(X)
         return cov_X, pattern, normalizer
     else:
         return pattern, normalizer
 
 
-def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
+def _compute_weights(X, y, pattern, cov_modifier=None, cov_updater=None,
+                     cov_modifier_params=None, method='auto'):
     '''Computes filter weights based on the given pattern.
 
-    This function also updates the covariance based on a user supplied
-    function.
+    This function performs part of the 'disassemble_modify_reassemble'
+    procedure, namely computing the weights of the linear model given the
+    pattern. The modificiation of the covariance is also handled here, since
+    this depends on whether the 'traditional' or 'kernel' method is used to
+    compute the weights.
 
-    There are two methods of computing the weights. The 'traditional' method
-    computes the (n_features x n_features) covariance matrix of X, while the
-    'kernel' method instead computes the (n_items x n_items) "item covariance".
-    One method can be much more efficient than the other, depending on the
-    number of features and items in the data.
+    The 'traditional' method computes the (n_features x n_features) covariance
+    matrix of X, while the 'kernel' method instead computes the (n_items x
+    n_items) "item covariance". One method can be much more efficient than the
+    other, depending on the number of features and items in the data.
+
+    No modification of the pattern or application of a normalizer is performed
+    in this function.
 
     Parameters
     ----------
     X : ndarray, shape (n_samples, n_features)
         The data. No centering or normalization will be performed on it.
     y : ndarray, shape (n_samples, n_targets) | None
-        The labels. Set to `None` if there are no labels.
+        The labels. No centering or normalization will be performed on it. Set
+        to `None` if there are no labels.
     pattern : ndarray, shape (n_features, n_targets)
         The pattern of the model.
-    cov_modifier : function (cov, x, y) | none
+    cov_modifier : function (cov, x, y) | None
         the user supplied function that modifies the covariance matrix.
-    cov_updater : function (x, y) | CovUpdater | none
+    cov_updater : function (x, y) | CovUpdater | None
         the user supplied function that updates the covariance matrix.
+    cov_modifier_params : list | None
+        Extra parameters to pass to the cov_modifier or cov_updater function.
+        Defaults to None, meaning no extra parameters.
     method : 'auto' | 'traditional' | 'kernel'
         Whether to use the traditional formulation of the linear model, which
         computes the covariance matrix, or whether to use the kernel trick to
@@ -154,6 +166,10 @@ def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
         modified by the function given by the user.
         Returns `None` when `method == 'kernel'`.
     '''
+    # Deal with defaults
+    if cov_modifier_params is None:
+        cov_modifier_params = []
+
     n_samples, n_features = X.shape
 
     # Determine optimal method of solving
@@ -170,15 +186,15 @@ def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
         # Modify the covariance using the function supplied by the user
         if cov_modifier is not None:
             # User supplied a modifier function
-            cov_X = cov_modifier(cov_X, X, y)
+            cov_X = cov_modifier(cov_X, X, y, *cov_modifier_params)
         if cov_updater is not None:
             if is_updater(cov_updater):
                 # User supplied a CovUpdater object for detailed control
-                update = cov_updater.fit(X, y).update()
+                update = cov_updater.fit(X, y).update(*cov_modifier_params)
                 cov_X = update.add(cov_X)
             else:
                 # User supplied an updater function
-                cov_X += cov_updater(X, y)
+                cov_X += cov_updater(X, y, *cov_modifier_params)
 
         # Re-assemble the linear model
         cov_X_inv = np.linalg.pinv(cov_X)
@@ -194,11 +210,11 @@ def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
         # Get the covariance updater from the function supplied by the user
         if is_updater(cov_updater):
             # User supplied a CovUpdater object for detailed control
-            cov_update = cov_updater.fit(X, y).update()
+            cov_update = cov_updater.fit(X, y).update(*cov_modifier_params)
             cov_update_inv = cov_update.inv()
         else:
             # User supplied an updater function
-            cov_update = cov_updater(X, y)
+            cov_update = cov_updater(X, y, *cov_modifier_params)
             cov_update_inv = np.linalg.pinv(cov_update)
 
         # Compute the weights, using the matrix inversion lemma
@@ -215,9 +231,12 @@ def compute_weights(X, y, pattern, cov_modifier, cov_updater, method='auto'):
                          '"traditional" or "kernel".')
 
 
-def disassemble_modify_reassemble(self, W, X, y, cov_modifier=None,
-                                  cov_updater=None, pattern_modifier=None,
-                                  normalizer_modifier=None, method='auto'):
+def disassemble_modify_reassemble(W, X, y, cov_modifier=None, cov_updater=None,
+                                  pattern_modifier=None,
+                                  normalizer_modifier=None, method='auto',
+                                  cov_modifier_params=None,
+                                  pattern_modifier_params=None,
+                                  normalizer_modifier_params=None):
     '''Disassemble, modify and reassemble a fitted linear model.
 
     This is the meat of the workbench approach. The linear model wrapped by
@@ -255,6 +274,15 @@ def disassemble_modify_reassemble(self, W, X, y, cov_modifier=None,
         computes the covariance matrix, or whether to use the kernel trick to
         avoid computing the covariance matrix. Defaults to `'auto'`, which
         attempts to find the best approach automatically.
+    cov_modifier_params : list | None
+        Extra parameters to pass to the cov_modifier or cov_updater function.
+        Defaults to None, meaning no extra parameters.
+    pattern_modifier_params : list | None
+        Extra parameters to pass to the pattern_modifier function. Defaults to
+        None, meaning no extra parameters.
+    normalizer_modifier_params : list | None
+        Extra parameters to pass to the normalizer_modifier function. Defaults
+        to None, meaning no extra parameters.
 
     Returns
     -------
@@ -275,24 +303,35 @@ def disassemble_modify_reassemble(self, W, X, y, cov_modifier=None,
     of things like centering and z-scoring, which are sometimes performed by a
     Scikit-Learn model.
     '''
+    # Deal with defaults
+    if cov_modifier_params is None:
+        cov_modifier_params = []
+    if pattern_modifier_params is None:
+        pattern_modifier_params = []
+    if normalizer_modifier_params is None:
+        normalizer_modifier_params = []
+
     pattern, normalizer = disassemble_model(W, X, compute_cov_X=False)
 
     # Shortcut if no modifications are required
     if (cov_modifier is cov_updater is pattern_modifier is normalizer_modifier
             is None):
-        return W, pattern, normalizer, None  # No covariance is computed
+        return W, None, pattern, normalizer  # No covariance is computed
 
     # Modify the pattern
     if pattern_modifier is not None:
-        pattern = pattern_modifier(pattern, X, y)
+        pattern = pattern_modifier(pattern, X, y, *pattern_modifier_params)
 
     # Compute weights
-    coef, cov_X = compute_weights(X, y, pattern, cov_modifier, cov_updater,
-                                  method)
+    coef, cov_X = _compute_weights(X, y, pattern, cov_modifier=cov_modifier,
+                                   cov_updater=cov_updater,
+                                   cov_modifier_params=cov_modifier_params,
+                                   method=method)
 
     # Modify and apply the normalizer
     if normalizer_modifier is not None:
-        normalizer = normalizer_modifier(normalizer, X, y, pattern, coef)
+        normalizer = normalizer_modifier(normalizer, X, y, pattern, coef,
+                                         *normalizer_modifier_params)
     coef = normalizer.dot(coef)
 
     return coef, cov_X, pattern, normalizer
@@ -355,22 +394,26 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
 
     Attributes
     ----------
-    coef_ : ndarray, shape (n_features, n_targets)
+    coef_ : ndarray, shape (n_targets, n_features)
         Matrix containing the filter weights.
     intercept_ : ndarray, shape (n_targets)
         The intercept of the linear model.
-    cov_ : ndarray, shape (n_features, n_features)
-        When using the traditional method, the altered covariance matrix.
+    cov_X_ : ndarray, shape (n_features, n_features)
+        The altered covariance matrix of X.
+        Only set when `method=='traditional'`.
     pattern_ : ndarray, shape (n_features, n_targets)
         The altered pattern.
+    normalizer_ : ndarray, shape (n_targets, n_targets)
+        The altered normalizer.
     '''
     def __init__(self, model, cov_modifier=None, cov_updater=None,
-                 pattern_modifier=None, method='auto', x0=None, bounds=None):
-
+                 pattern_modifier=None, normalizer_modifier=None,
+                 method='auto'):
         self.model = model
         self.cov_modifier = cov_modifier
         self.cov_updater = cov_updater
         self.pattern_modifier = pattern_modifier
+        self.normalizer_modifier = normalizer_modifier
         self.method = method
 
         if not isinstance(model, LinearModel):
@@ -386,6 +429,11 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             raise ValueError('Cannot specify both a covariance modifier and '
                              'a coviarance updater function.')
 
+        if is_updater(cov_modifier):
+            raise ValueError('Cannot specify a CovUpdater object as '
+                             'cov_modifier. Use the cov_updater parameter '
+                             'instead.')
+
         if method not in ['traditional', 'kernel', 'auto']:
             raise ValueError('Invalid value for "method" parameter. Must be '
                              'one of: "traditional", "kernel", or "auto"')
@@ -397,7 +445,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
                              'covariance updater function, rather than a '
                              'covariance modifier function.')
 
-    def fit(self, X, y):
+    def fit(self, X, y, sample_weight=None):
         """Fit the model to the data.
 
         Parameters
@@ -406,6 +454,9 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             The data to fit the model to.
         y : ndarray, shape (n_features, n_targets)
             The target labels.
+        sample_weight : nparray, shape (n_samples) | None
+            Weighting factors for each feature. If None, all samples are
+            equally weighted.
 
         Returns
         -------
@@ -413,7 +464,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             The fitted model.
         """
         # Fit the base model
-        self.model.fit(X, y)
+        self.model.fit(X, y, sample_weight=sample_weight)
 
         if not hasattr(self.model, 'coef_'):
             raise RuntimeError(
@@ -428,7 +479,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         self.normalize = getattr(self.model, 'normalize', False)
         X, y, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
-            normalize=self.normalize, copy=True,
+            normalize=self.normalize, copy=True, sample_weight=sample_weight,
         )
 
         # Ensure that y is a 2D array: n_samples x n_targets
@@ -439,24 +490,26 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         # The `coef_` attribute of Scikit-Learn linear models are re-scaled
         # after normalization. Undo this re-scaling.
         W = self.model.coef_ * X_scale
-
         # Modify the original linear model and obtain a new one
-        self.coef_, pattern, cov_X = disassemble_modify_reassemble(
+        coef, cov_X, pattern, normalizer = disassemble_modify_reassemble(
             W, X, y, self.cov_modifier, self.cov_updater,
             self.pattern_modifier, self.normalizer_modifier, self.method,
         )
 
-        # Store the pattern as an attribute, so the user may inspect it
+        # Store the decomposed model as attributes, so the user may inspect it
+        if flat_y:
+            self.coef_ = coef.ravel()
+        else:
+            self.coef_ = coef
+
         if self.normalize:
             self.pattern_normalized_ = pattern
         self.pattern_ = pattern * X_scale[:, np.newaxis]
 
-        # Store the covariance as an attribute, so the user may inspect it
         if cov_X is not None:
-            self.cov_ = cov_X
+            self.cov_X_ = cov_X
 
-        if flat_y:
-            self.coef_ = self.coef_.ravel()
+        self.normalizer_ = normalizer
 
         # Set intercept and undo normalization
         self._set_intercept(X_offset, y_offset, X_scale)
@@ -531,15 +584,15 @@ def _get_opt_params(modifier, x0, bounds):
 
 class WorkbenchOptimizer(Workbench):
     """Experimental work in process. Don't use this yet."""
-    def __init__(self, model,
-                 cov_modifier=None, cov_updater=None,
+    def __init__(self, model, cov_modifier=None, cov_updater=None,
                  cov_param_x0=None, cov_param_bounds=None,
-                 pattern_modifier=None,
-                 pattern_param_x0=None, pattern_param_bounds=None,
-                 method='auto', verbose=True,
+                 pattern_modifier=None, pattern_param_x0=None,
+                 pattern_param_bounds=None, normalizer_modifier=None,
+                 normalizer_param_x0=None, normalizer_param_bounds=None,
+                 optimizer_options=None, method='auto', verbose=True,
                  scoring='neg_mean_squared_error'):
         Workbench.__init__(self, model, cov_modifier, cov_updater,
-                           pattern_modifier, method)
+                           pattern_modifier, normalizer_modifier, method)
 
         self.cov_param_x0, self.cov_param_bounds = _get_opt_params(
             cov_modifier if cov_modifier is not None else cov_updater,
@@ -549,6 +602,11 @@ class WorkbenchOptimizer(Workbench):
 
         self.verbose = verbose
         self.scoring = scoring
+
+        if optimizer_options is None:
+            self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
+        else:
+            self.optimizer_options = optimizer_options
 
     def fit(self, X, y, sample_weight=None):
         """Fit the model to the data and optimize all parameters.
@@ -568,6 +626,9 @@ class WorkbenchOptimizer(Workbench):
         self : instance of Workbench
             The fitted model.
         """
+        # Keep a copy of the original X and y
+        X_orig, y_orig = X, y
+
         # Remove the offset from X and y to compute the covariance later.
         # Also normalize X if the base model did so.
         self.fit_intercept = getattr(self.model, 'fit_intercept', False)
@@ -679,48 +740,41 @@ class WorkbenchOptimizer(Workbench):
             x0=self.cov_param_x0 + self.pattern_param_x0,
             method='L-BFGS-B',
             bounds=self.cov_param_bounds + self.pattern_param_bounds,
-            options=dict(
-                maxiter=10,
-                eps=1E-3,
-                ftol=1E-6,
-            ),
+            options=self.optimizer_options,
         ).x.tolist()
 
         self.cov_updater_params_ = params[:n_cov_updater_params]
         self.pattern_modifier_params_ = params[n_cov_updater_params:]
 
-        # Construct wrapper methods that call the user supplied functions with
-        # the optimal parameters.
-        if is_updater(self.cov_updater):
-            cov_updater = self.cov_updater.update(*self.cov_updater_params_)
-        elif self.cov_updater is not None:
-            def cov_updater(X, y):
-                return self.cov_updater(X, y, *self.cov_updater_params_)
-        else:
-            cov_updater = None
-
-        if self.pattern_modifier is not None:
-            def pattern_modifier(pattern, X, y):
-                return self.pattern_modifier(X, y,
-                                             *self.pattern_modifier_params_)
-        else:
-            pattern_modifier = None
-
         # Compute the linear model with the optimal parameters
-        W = self.model.fit(X, y).coef_ * X_scale
-        self.coef_, pattern, cov_X = self._disassemble_modify_reassemble(
+        W = self.model.fit(X_orig, y_orig).coef_
+        W *= X_scale
+
+        # Modify the original linear model and obtain a new one
+        coef, cov_X, pattern, normalizer = disassemble_modify_reassemble(
             W, X, y,
-            cov_updater=cov_updater,
-            pattern_modifier=pattern_modifier
+            cov_updater=self.cov_updater,
+            pattern_modifier=self.pattern_modifier,
+            normalizer_modifier=self.normalizer_modifier,
+            cov_modifier_params=self.cov_updater_params_,
+            pattern_modifier_params=self.pattern_modifier_params_,
+            normalizer_modifier_params=None,  # TODO
         )
 
-        # Store the pattern as an attribute, so the user may inspect it
+        # Store the decomposed model as attributes, so the user may inspect it
+        if flat_y:
+            self.coef_ = coef.ravel()
+        else:
+            self.coef_ = coef
+
         if self.normalize:
             self.pattern_normalized_ = pattern
         self.pattern_ = pattern * X_scale[:, np.newaxis]
 
-        if flat_y:
-            self.coef_ = self.coef_.ravel()
+        if cov_X is not None:
+            self.cov_X_ = cov_X
+
+        self.normalizer_ = normalizer
 
         # Set intercept and undo normalization
         self._set_intercept(X_offset, y_offset, X_scale)

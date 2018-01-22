@@ -3,7 +3,8 @@ import numpy as np
 from sklearn.base import TransformerMixin, RegressorMixin
 from sklearn.linear_model.base import LinearModel
 
-from .workbench import compute_weights
+from .workbench import _compute_weights
+
 
 class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     '''An LCMV beamformer filter.
@@ -15,8 +16,8 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     signal of interest.
 
     By default, a 'unit-gain' LCMV beamformer is used, that passes a signal
-    conforming to the given template with unit gain (self.coef_ @ template == I).
-    Other types of beamformers can be constructed by using the
+    conforming to the given template with unit gain (self.coef_ @ template ==
+    I). Other types of beamformers can be constructed by using the
     `normalizer_modifier` parameter.
 
     Shrinkage of the covariance matrix can improve the stability of the filter
@@ -112,8 +113,8 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
         )
 
         # Compute weights
-        coef, _ = compute_weights(X, None, self.template.T, self.cov_modifier,
-                                  self.cov_updater, self.method)
+        coef, _ = _compute_weights(X, None, self.template.T, self.cov_modifier,
+                                   self.cov_updater, self.method)
 
         # The default normalizer constructs a unit-gain LCMV beamformer
         normalizer = [c.dot(p) for c, p in zip(coef, self.template)]

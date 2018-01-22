@@ -3,10 +3,10 @@ from __future__ import division
 
 from numpy.testing import assert_allclose
 from nose.tools import assert_true, assert_greater
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 import numpy as np
 
-from workbench import Workbench, ShrinkageUpdater
+from workbench import Workbench, WorkbenchOptimizer, ShrinkageUpdater
 
 
 def _gen_data(noise_scale=2, zero_mean=False):
@@ -132,9 +132,14 @@ def test_identity_transform():
     def pattern_modifier(pattern, X, y):
         return pattern
 
+    def normalizer_modifier(normalizer, X_train, y_train, cov_X, coef):
+        return normalizer
+
     # Using a modifier function
     wb = Workbench(ols, cov_modifier=cov_modifier,
-                   pattern_modifier=pattern_modifier, method='traditional')
+                   pattern_modifier=pattern_modifier,
+                   normalizer_modifier=normalizer_modifier,
+                   method='traditional')
     wb.fit(X[train], y[train])
     _compare_models(wb, ols, X[test])
 
@@ -142,7 +147,9 @@ def test_identity_transform():
     # The "kernel" solver cannot be used, as an update rule of all zero's does
     # not have an inverse.
     wb = Workbench(LinearRegression(), cov_updater=cov_updater,
-                   pattern_modifier=pattern_modifier, method='traditional')
+                   pattern_modifier=pattern_modifier,
+                   normalizer_modifier=normalizer_modifier,
+                   method='traditional')
     wb.fit(X[train], y[train])
     _compare_models(wb, ols, X[test])
 
@@ -179,11 +186,10 @@ def test_ridge_regression():
     wb.fit(X[train], y[train])
     _compare_models(wb, ridge, X[test])
 
-    # The "kernel" method is not exact due to there being only 3 features.
-    # Its accuracy will improve if the data has more features.
+    # Try the "kernel" method
     wb = Workbench(ols, cov_updater=cov_updater, method='kernel')
     wb.fit(X[train], y[train])
-    _compare_models(wb, ridge, X[test], rtol=1E-5)
+    _compare_models(wb, ridge, X[test])
 
     # Test using a CovUpdater object
     wb = Workbench(ols, cov_updater=ShrinkageUpdater(alpha),
@@ -193,32 +199,100 @@ def test_ridge_regression():
 
     wb = Workbench(ols, cov_updater=ShrinkageUpdater(alpha), method='kernel')
     wb.fit(X[train], y[train])
-    _compare_models(wb, ridge, X[test], rtol=1E-5)
+    _compare_models(wb, ridge, X[test])
 
 
-def test_pattern_modification():
-    """Test swapping out the estimated pattern."""
+def test_post_hoc_modification():
+    """Test post-hoc modification of the model."""
     X, y, A = _gen_data(noise_scale=10)
+
     train = np.arange(5)         # Samples used as training set
     test = np.arange(5, len(X))  # Samples used as test set
 
     # The OLS regressor we're going to try and optimize
-    ols = Workbench(LinearRegression()).fit(X[train], y[train])
+    ols = LinearRegression().fit(X[train], y[train])
     ols_score = ols.score(X[test], y[test])
 
     # Use post-hoc adaptation to swap out the cov matrix estimated on the
     # training data only, with one that was estimated on all data.
-    def cov_modifier(cov, X_, y_):
-        return X.T.dot(X)
+    def cov_modifier(cov, X_train, y_train):
+        X_ = X - X.mean(axis=0)
+        return X_.T.dot(X_) / len(X_)
 
-    # Use post-hoc adaptation to swap out the pattern with the actual pattern.
-    def pattern_modifier(pattern, X, y):
+    # Use post-hoc adaptation to swap out the estimated pattern with the actual
+    # pattern.
+    def pattern_modifier(pattern, X_train, y_train):
         return A  # The ground truth pattern
 
-    wb = Workbench(LinearRegression(), cov_modifier=cov_modifier,
-                   pattern_modifier=pattern_modifier)
+    # Use post-hoc adaptation to swap out the normalizer estimated on the
+    # training data only, with one that was estimated on all data.
+    def normalizer_modifier(normalizer, X_train, y_train, cov_X, coef):
+        y_ = y - y.mean(axis=0)
+        return y_.T.dot(y_) / len(y_)  # The ground truth normalizer
+
+    wb = Workbench(LinearRegression(),
+                   cov_modifier=cov_modifier,
+                   pattern_modifier=pattern_modifier,
+                   normalizer_modifier=normalizer_modifier)
     wb.fit(X[train], y[train])
 
     # The new regressor should perform better
     wb_score = wb.score(X[test], y[test])
     assert_greater(wb_score, ols_score)
+    assert_greater(wb_score, 0.9)  # The new regression should be awesome
+
+
+def test_workbench_optimizer():
+    """Test using an optimizer to fine-tune parameters."""
+    X, y, A = _gen_data(noise_scale=10)
+
+    train = np.arange(5)         # Samples used as training set
+    test = np.arange(5, len(X))  # Samples used as test set
+
+    # The OLS regressor we're going to try and optimize
+    ols = LinearRegression().fit(X[train], y[train])
+    ols_score = ols.score(X[test], y[test])
+
+    wb = WorkbenchOptimizer(LinearRegression(), cov_updater=ShrinkageUpdater())
+    wb.fit(X[train], y[train])
+    wb_score = wb.score(X[test], y[test])
+
+    # The optimized model should be better
+    assert_greater(wb_score, ols_score)
+
+
+def test_workbench_optimizer2():
+    """Test using an optimizer to fine-tune parameters."""
+    X, y, A = _gen_data(noise_scale=10)
+
+    train = np.arange(5)         # Samples used as training set
+    test = np.arange(5, len(X))  # Samples used as test set
+
+    # The OLS regressor we're going to try and optimize
+    ols = LinearRegression().fit(X[train], y[train])
+    ols_score = ols.score(X[test], y[test])
+
+    X_ = X - X.mean(axis=0)
+    cov_X = X_.T.dot(X_) / len(X_)
+
+    def cov_updater(X, y, alpha=0.5):
+        cov = X.T.dot(X)
+        return (1 - alpha) * cov + alpha * cov_X * len(X)
+
+    def pattern_modifier(pattern, X, y, beta=0.5):
+        return (1 - beta) * pattern + beta * A
+
+    wb = WorkbenchOptimizer(LinearRegression(), cov_updater=cov_updater,
+                            pattern_modifier=pattern_modifier,
+                            cov_param_x0=[0.5], cov_param_bounds=[(0, 1)],
+                            pattern_param_x0=[0.5],
+                            pattern_param_bounds=[(0, 1)])
+    wb.fit(X[train], y[train])
+    wb_score = wb.score(X[test], y[test])
+
+    rr = RidgeCV().fit(X[train], y[train])
+    rr_score = rr.score(X[test], y[test])
+
+    print('OLS:', ols_score, 'RR:', rr_score, 'WB:', wb_score)
+    assert_greater(wb_score, ols_score)
+    assert_greater(wb_score, 0.5)  # The new regression should be awesome

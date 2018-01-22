@@ -1,7 +1,8 @@
 import numpy as np
-from numpy.linalg import pinv, lstsq, multi_dot
+from numpy.linalg import pinv
+from scipy.stats import zscore
 
-from sklearn.linear_model import LinearRegression, RidgeCV
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import LeaveOneOut
 
 import progressbar
@@ -159,54 +160,45 @@ def loo_patterns_from_model(model, X, y, verbose=False):
         The pattern computed for the model fitted to the data with the i'th
         sample left out.
     """
-    if type(model) == LinearRegression:
-        for train, test in LeaveOneOut().split(X, y):
+    n_samples = len(X)
+
+    if verbose:
+        print('Computing patterns for each leave-one-out iteration...')
+        pbar = start_progress_bar(n_samples)
+
+    # Try to determine whether the model normalizes the data
+    normalize = hasattr(model, 'normalize') and model.normalize
+
+    for train, _ in LeaveOneOut().split(X, y):
+        # Fit the base model
+        if normalize:
+            X_ = zscore(X[train], axis=0)
+            y_ = y[train]
+            y_ -= y_.mean(axis=0)
+        else:
             X_ = X[train]
             y_ = y[train]
 
-            if model.fit_intercept:
-                X_ = X_ - X_.mean(axis=0, keepdims=True)
-                y_ = y_ - y_.mean(axis=0, keepdims=True)
-            if model.normalize:
-                X_ /= X.std(axis=0, keepdims=True)
+        model.fit(X_, y_)
 
-            yield X_.T.dot(y_)
+        if not hasattr(model, 'coef_'):
+            raise RuntimeError(
+                'Model does not have a `coef_` attribute after fitting. '
+                'This does not seem to be a linear model following the '
+                'Scikit-Learn API.'
+            )
 
-    else:
-        n_samples = len(X)
+        y_hat = X_.dot(model.coef_.T) + model.intercept_
+        if y_hat.ndim == 1:
+            y_hat = y_hat[:, np.newaxis]
+
+        # Compute the pattern from the base model filter weights,
+        # conforming equation 6 from Haufe2014.
+        m = LinearRegression().fit(y_hat, X_)
 
         if verbose:
-            print('Computing patterns for each leave-one-out iteration...')
-            pbar = start_progress_bar(n_samples)
+            pbar.update(pbar.value + 1)
 
-        # TODO: check the validity of this!
-        for train, _ in LeaveOneOut().split(X, y):
-            # Fit the base model
-            model.fit(X[train], y[train])
-
-            if not hasattr(model, 'coef_'):
-                raise RuntimeError(
-                    'Model does not have a `coef_` attribute after fitting. '
-                    'This does not seem to be a linear model following the '
-                    'Scikit-Learn API.'
-                )
-
-            # Compute the pattern from the base model filter weights,
-            # conforming equation 6 from Haufe2014.
-            y_hat = model.predict(X[train])
-            if y_hat.ndim == 1:
-                y_hat = y_hat[:, np.newaxis]
-
-            X_ = X[train]
-            if model.fit_intercept:
-                X_ = X_ - X_.mean(axis=0, keepdims=True)
-            if model.normalize:
-                X_ /= X.std(axis=0, keepdims=True)
-            m = LinearRegression(fit_intercept=False).fit(y_hat, X_)
-
-            if verbose:
-                pbar.update(pbar.currval + 1)
-
-            yield m.coef_
-        if verbose:
-            pbar.finish()
+        yield m.coef_
+    if verbose:
+        pbar.finish()
