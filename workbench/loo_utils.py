@@ -1,10 +1,8 @@
 import numpy as np
-from numpy.linalg import pinv
+from numpy.linalg import pinv, multi_dot
 from scipy.stats import zscore
-
-from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import LeaveOneOut
-
+from sklearn.linear_model.base import LinearModel
 import progressbar
 
 
@@ -166,21 +164,17 @@ def loo_patterns_from_model(model, X, y, verbose=False):
         print('Computing patterns for each leave-one-out iteration...')
         pbar = start_progress_bar(n_samples)
 
-    # Try to determine whether the model normalizes the data
+    # Try to determine how the model normalizes the data
     normalize = hasattr(model, 'normalize') and model.normalize
+    fit_intercept = hasattr(model, 'fit_intercept') and model.fit_intercept
 
     for train, _ in LeaveOneOut().split(X, y):
-        # Fit the base model
-        if normalize:
-            X_ = zscore(X[train], axis=0)
-            y_ = y[train]
-            y_ -= y_.mean(axis=0)
-        else:
-            X_ = X[train]
-            y_ = y[train]
+        X_, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
+            X=X[train], y=y[train], fit_intercept=fit_intercept,
+            normalize=normalize, copy=True, sample_weight=None,
+        )
 
         model.fit(X_, y_)
-
         if not hasattr(model, 'coef_'):
             raise RuntimeError(
                 'Model does not have a `coef_` attribute after fitting. '
@@ -188,17 +182,19 @@ def loo_patterns_from_model(model, X, y, verbose=False):
                 'Scikit-Learn API.'
             )
 
-        y_hat = X_.dot(model.coef_.T) + model.intercept_
+        y_hat = X_.dot(model.coef_.T)
         if y_hat.ndim == 1:
             y_hat = y_hat[:, np.newaxis]
 
+        normalizer = y_hat.T.dot(y_hat)
+
         # Compute the pattern from the base model filter weights,
         # conforming equation 6 from Haufe2014.
-        m = LinearRegression().fit(y_hat, X_)
+        pattern = multi_dot((X_.T, X_, model.coef_.T, pinv(normalizer)))
 
         if verbose:
             pbar.update(pbar.value + 1)
 
-        yield m.coef_
+        yield pattern, normalizer
     if verbose:
         pbar.finish()

@@ -5,12 +5,13 @@ import inspect
 
 import numpy as np
 from scipy.optimize import minimize
-from numpy.linalg import multi_dot
+from numpy.linalg import multi_dot, pinv
 
 from sklearn.base import TransformerMixin, RegressorMixin
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model.base import LinearModel
 from sklearn.metrics.scorer import check_scoring
+from sklearn.model_selection import LeaveOneOut
 
 from . import loo_utils
 from .cov_updaters import CovUpdater
@@ -332,6 +333,11 @@ def disassemble_modify_reassemble(W, X, y, cov_modifier=None, cov_updater=None,
     if normalizer_modifier is not None:
         normalizer = normalizer_modifier(normalizer, X, y, pattern, coef,
                                          *normalizer_modifier_params)
+
+    if coef.ndim == 1:
+        coef = coef[np.newaxis, :]
+
+    normalizer = np.atleast_2d(normalizer)
     coef = normalizer.dot(coef)
 
     return coef, cov_X, pattern, normalizer
@@ -551,7 +557,7 @@ def get_args(updater):
         args = [arg for arg in args if arg != 'self']
     else:
         args = inspect.getargspec(updater).args
-        ignore_args = {'self', 'X', 'y', 'pattern'}
+        ignore_args = {'self', 'X', 'y', 'pattern', 'normalizer', 'coef'}
         args = [arg for arg in args if arg not in ignore_args]
         print('optimizable args:', args)
 
@@ -599,14 +605,16 @@ class WorkbenchOptimizer(Workbench):
             cov_param_x0, cov_param_bounds)
         self.pattern_param_x0, self.pattern_param_bounds = _get_opt_params(
             pattern_modifier, pattern_param_x0, pattern_param_bounds)
+        self.normalizer_param_x0, self.normalizer_param_bounds = _get_opt_params(
+            normalizer_modifier, normalizer_param_x0, normalizer_param_bounds)
 
         self.verbose = verbose
         self.scoring = scoring
 
-        if optimizer_options is None:
-            self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
-        else:
-            self.optimizer_options = optimizer_options
+        self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
+        if optimizer_options is not None:
+            self.optimizer_options.update(optimizer_options)
+
 
     def fit(self, X, y, sample_weight=None):
         """Fit the model to the data and optimize all parameters.
@@ -646,18 +654,18 @@ class WorkbenchOptimizer(Workbench):
             y = np.atleast_2d(y).T
         n_targets = y.shape[1]
 
-        Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
-        patterns = loo_utils.loo_patterns_from_model(
-            self.model, X, y, verbose=self.verbose)
-        for i, pattern in enumerate(patterns):
-            Ps[i] = pattern
-
         if is_updater(self.cov_updater):
+            # Initialize the CovUpdater object
             self.cov_updater.fit(X, y)
 
+        # Collect parameters to optimize
         n_cov_updater_params = len(get_args(self.cov_updater))
-        cov_param_cache = dict()
+        if self.pattern_modifier is not None:
+            n_pat_modifier_params = len(get_args(self.pattern_modifier))
+        else:
+            n_pat_modifier_params = 0
 
+        # Prepare scoring functions
         scorer = check_scoring(self, scoring=self.scoring, allow_none=False)
 
         # The scorer wants an object that will make the predictions but
@@ -668,12 +676,28 @@ class WorkbenchOptimizer(Workbench):
         identity_estimator.decision_function = lambda y_predict: y_predict
         identity_estimator.predict = lambda y_predict: y_predict
 
-        def compute_GK(cov_update_inv, X):
-            G = cov_update_inv.dot(X.T)
-            K = X.dot(G)
-            K.flat[::n_samples + 1] += 1
+        # Determine optimal method of solving
+        if self.method == 'auto':
+            if n_features > n_samples and self.cov_updater is not None:
+                method = 'kernel'
+            else:
+                method = 'traditional'
+        else:
+            method = self.method
 
-            return G, K
+        # Compute patterns and normalizers for all LOO iterations
+        Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
+        Ns = np.empty((n_samples, n_targets, n_targets), dtype=np.float)
+        patterns = loo_utils.loo_patterns_from_model(self.model, X, y,
+                                                     verbose=self.verbose)
+        for i, (pattern, normalizer) in enumerate(patterns):
+            Ps[i] = pattern
+            Ns[i] = normalizer
+
+        if method == 'traditional':
+            cov_X = X.T.dot(X)
+
+        cache = dict()
 
         def score(args):
             # Convert params to a tuple, so it can be hashed
@@ -681,70 +705,47 @@ class WorkbenchOptimizer(Workbench):
                 args[:n_cov_updater_params].tolist()
             )
             pattern_modifier_params = tuple(
-                args[n_cov_updater_params:].tolist()
+                args[n_cov_updater_params:n_cov_updater_params +
+                     n_pat_modifier_params].tolist()
+            )
+            normalizer_modifier_params = tuple(
+                args[n_cov_updater_params+n_pat_modifier_params:].tolist()
             )
 
-            if cov_updater_params in cov_param_cache:
-                # Cache hit
-                cov_update_inv, G, K = cov_param_cache[cov_updater_params]
-            else:
-                # Cache miss, compute values and store in cache
-                if is_updater(self.cov_updater):
-                    # User supplied a CovUpdater object for detailed control
-                    cov_update = self.cov_updater.update(*cov_updater_params)
-                    cov_update_inv = cov_update.inv()
-                else:
-                    # User supplied an updater function
-                    cov_update = self.cov_updater(X, y)
-                    cov_update_inv = np.linalg.pinv(cov_update)
-                G, K = compute_GK(cov_update_inv, X)
-                cov_param_cache[cov_updater_params] = (cov_update_inv, G, K)
+            if method == 'traditional':
+                y_hat = do_loo(X, y, Ps, Ns, cov_X, self.cov_modifier,
+                               self.cov_updater, cov_updater_params,
+                               self.pattern_modifier, pattern_modifier_params,
+                               self.normalizer_modifier,
+                               normalizer_modifier_params, cache)
+            elif method == 'kernel':
+                y_hat = do_loo_kernel(X, y, Ps, Ns, self.cov_updater,
+                                      cov_updater_params,
+                                      self.pattern_modifier,
+                                      pattern_modifier_params,
+                                      self.normalizer_modifier,
+                                      normalizer_modifier_params, cache)
 
-            # Do efficient leave-one-out crossvalidation
-            y_hat = np.zeros_like(y)
-            G1 = None
-            X1 = None
-            y1 = None
-            for K_i, test in zip(loo_utils.loo_kern_inv(K), range(n_samples)):
-                if G1 is None or X1 is None:
-                    G1 = G[:, 1:].copy()
-                    X1 = X[1:].copy()
-                    y1 = y[1:].copy()
-                else:
-                    if test >= 2:
-                        G1[:, test - 2] = G[:, test - 1]
-                        X1[test - 2] = X[test - 1]
-                        y1[test - 2] = y[test - 1]
-                    G1[:, test - 1] = G[:, 0]
-                    X1[test - 1] = X[0]
-                    y1[test - 1] = y[0]
-
-                P = Ps[test]
-                if self.pattern_modifier is not None:
-                    P = self.pattern_modifier(P, X, y,
-                                              *pattern_modifier_params)
-                GammaP = cov_update_inv.dot(P)
-
-                y_hat[test] = X[test].dot(GammaP -
-                                          G1.dot(K_i.dot(X1.dot(GammaP))))
             score = scorer(identity_estimator, y.ravel(), y_hat.ravel())
 
             if self.verbose:
                 print('cov_updater_params=%s, pattern_modifier_params=%s, '
-                      'score=%f' %
-                      (cov_updater_params, pattern_modifier_params, score))
+                      'normalizer_modifier_params=%s score=%f' %
+                      (cov_updater_params, pattern_modifier_params,
+                       normalizer_modifier_params, score))
             return -score
 
         params = minimize(
             score,
-            x0=self.cov_param_x0 + self.pattern_param_x0,
+            x0=self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0,
             method='L-BFGS-B',
-            bounds=self.cov_param_bounds + self.pattern_param_bounds,
+            bounds=self.cov_param_bounds + self.pattern_param_bounds + self.normalizer_param_bounds,
             options=self.optimizer_options,
         ).x.tolist()
 
         self.cov_updater_params_ = params[:n_cov_updater_params]
-        self.pattern_modifier_params_ = params[n_cov_updater_params:]
+        self.pattern_modifier_params_ = params[n_cov_updater_params:n_cov_updater_params + n_pat_modifier_params]
+        self.normalizer_modifier_params_ = params[n_cov_updater_params + n_pat_modifier_params:]
 
         # Compute the linear model with the optimal parameters
         W = self.model.fit(X_orig, y_orig).coef_
@@ -758,7 +759,7 @@ class WorkbenchOptimizer(Workbench):
             normalizer_modifier=self.normalizer_modifier,
             cov_modifier_params=self.cov_updater_params_,
             pattern_modifier_params=self.pattern_modifier_params_,
-            normalizer_modifier_params=None,  # TODO
+            normalizer_modifier_params=self.normalizer_modifier_params_,
         )
 
         # Store the decomposed model as attributes, so the user may inspect it
@@ -780,3 +781,108 @@ class WorkbenchOptimizer(Workbench):
         self._set_intercept(X_offset, y_offset, X_scale)
 
         return self
+
+
+def do_loo(X, y, Ps, Ns, cov_X, cov_modifier, cov_updater, cov_updater_params,
+           pattern_modifier, pattern_modifier_params, normalizer_modifier,
+           normalizer_modifier_params, cache):
+
+    if cov_updater_params in cache:
+        # Cache hit
+        cov_X_inv = cache[cov_updater_params]
+    else:
+        # Cache miss, compute values and store in cache
+        if cov_modifier is not None:
+            cov_X = cov_modifier(cov_X, X, y, *cov_updater_params)
+        if is_updater(cov_updater):
+            # User supplied a CovUpdater object for detailed control
+            cov_update = cov_updater.update(*cov_updater_params)
+            cov_X = cov_update.add(cov_X)
+        else:
+            # User supplied an updater function
+            cov_X += cov_updater(X, y, *cov_updater_params)
+
+        cov_X_inv = pinv(cov_X)
+        cache[cov_updater_params] = cov_X_inv
+
+    # Do leave-one-out crossvalidation
+    y_hat = np.zeros_like(y)
+    for train, test in LeaveOneOut().split(X, y):
+        P = Ps[test[0]]
+        if pattern_modifier is not None:
+            P = pattern_modifier(P, X, y, *pattern_modifier_params)
+
+        coef = cov_X_inv.dot(P).T
+
+        N = Ns[test[0]]
+        if normalizer_modifier is not None:
+            N = normalizer_modifier(N, X, y, coef, P,
+                                    *normalizer_modifier_params)
+        N = np.atleast_2d(N)
+        y_hat[test] = multi_dot((X[test], coef.T, N))
+
+    return y_hat
+
+
+def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
+                  pattern_modifier, pattern_modifier_params,
+                  normalizer_modifier, normalizer_modifier_params, cache):
+    n_samples = len(X)
+
+    if cov_updater_params in cache:
+        # Cache hit
+        cov_update_inv, G, K = cache[cov_updater_params]
+    else:
+        # Cache miss, compute values and store in cache
+        if is_updater(cov_updater):
+            # User supplied a CovUpdater object for detailed control
+            cov_update = cov_updater.update(*cov_updater_params)
+            cov_update_inv = cov_update.inv()
+        else:
+            # User supplied an updater function
+            cov_update = cov_updater(X, y)
+            cov_update_inv = np.linalg.pinv(cov_update)
+
+        G = cov_update_inv.dot(X.T)
+        K = X.dot(G)
+        K.flat[::n_samples + 1] += 1
+        cache[cov_updater_params] = (cov_update_inv, G, K)
+
+    # Do efficient leave-one-out crossvalidation
+    y_hat = np.zeros_like(y)
+    G1 = None
+    X1 = None
+    y1 = None
+    for K_i, test in zip(loo_utils.loo_kern_inv(K), range(n_samples)):
+        if G1 is None or X1 is None:
+            G1 = G[:, 1:].copy()
+            X1 = X[1:].copy()
+            y1 = y[1:].copy()
+        else:
+            if test >= 2:
+                G1[:, test - 2] = G[:, test - 1]
+                X1[test - 2] = X[test - 1]
+                y1[test - 2] = y[test - 1]
+            G1[:, test - 1] = G[:, 0]
+            X1[test - 1] = X[0]
+            y1[test - 1] = y[0]
+
+        P = Ps[test]
+        if pattern_modifier is not None:
+            P = pattern_modifier(P, X, y, *pattern_modifier_params)
+        GammaP = cov_update_inv.dot(P)
+
+        coef = (GammaP - G1.dot(K_i.dot(X1.dot(GammaP)))).T
+
+        N = Ns[test]
+        if normalizer_modifier is not None:
+            N = normalizer_modifier(N, X, y, coef, P,
+                                    *normalizer_modifier_params)
+        N = np.atleast_2d(N)
+
+        if coef.ndim == 1:
+            coef = coef[np.newaxis, :]
+
+        y_hat[test] = multi_dot((X[[test]], coef.T, N))
+
+    return y_hat
