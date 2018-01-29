@@ -816,7 +816,7 @@ def do_loo(X, y, Ps, Ns, cov_X, cov_modifier, cov_updater, cov_updater_params,
 
         N = Ns[test[0]]
         if normalizer_modifier is not None:
-            N = normalizer_modifier(N, X, y, coef, P,
+            N = normalizer_modifier(N, X, y, P, coef
                                     *normalizer_modifier_params)
         N = np.atleast_2d(N)
         y_hat[test] = multi_dot((X[test], coef.T, N))
@@ -876,7 +876,7 @@ def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
 
         N = Ns[test]
         if normalizer_modifier is not None:
-            N = normalizer_modifier(N, X, y, coef, P,
+            N = normalizer_modifier(N, X, y, P, coef,
                                     *normalizer_modifier_params)
         N = np.atleast_2d(N)
 
