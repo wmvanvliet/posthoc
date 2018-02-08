@@ -47,15 +47,21 @@ class ShrinkageUpdater(CovUpdater):
         CovUpdater.__init__(self, None)
         self.alpha = alpha
 
+    def fit(self, X, y):
+        self._scale = np.trace(X.T.dot(X)) / X.shape[1]
+        return self
+
     def update(self, alpha=None):
         if alpha is None:
             return self  # use default value
         else:
-            return ShrinkageUpdater(alpha)
+            s = ShrinkageUpdater(alpha)
+            s._scale = self._scale
+            return s
 
     def add(self, X):
         X = X.copy()
-        X.flat[::len(X) + 1] += self.alpha
+        X.flat[::len(X) + 1] += self._scale * self.alpha
         return X
 
     def dot(self, X):

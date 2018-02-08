@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.linalg import pinv, multi_dot
-from scipy.stats import zscore
+from sklearn.base import RegressorMixin
 from sklearn.model_selection import LeaveOneOut
 from sklearn.linear_model.base import LinearModel
 import progressbar
@@ -169,10 +169,15 @@ def loo_patterns_from_model(model, X, y, verbose=False):
     fit_intercept = hasattr(model, 'fit_intercept') and model.fit_intercept
 
     for train, _ in LeaveOneOut().split(X, y):
-        X_, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
+        X_, y__, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X[train], y=y[train], fit_intercept=fit_intercept,
             normalize=normalize, copy=True, sample_weight=None,
         )
+
+        if isinstance(model, RegressorMixin):
+            y_ = y__
+        else:
+            y_ = y[train]
 
         model.fit(X_, y_)
         if not hasattr(model, 'coef_'):

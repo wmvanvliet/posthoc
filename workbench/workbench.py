@@ -7,7 +7,7 @@ import numpy as np
 from scipy.optimize import minimize
 from numpy.linalg import multi_dot, pinv
 
-from sklearn.base import TransformerMixin, RegressorMixin
+from sklearn.base import TransformerMixin, RegressorMixin, ClassifierMixin
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model.base import LinearModel
 from sklearn.metrics.scorer import check_scoring
@@ -451,7 +451,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
                              'covariance updater function, rather than a '
                              'covariance modifier function.')
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X, y):
         """Fit the model to the data.
 
         Parameters
@@ -460,9 +460,6 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             The data to fit the model to.
         y : ndarray, shape (n_features, n_targets)
             The target labels.
-        sample_weight : nparray, shape (n_samples) | None
-            Weighting factors for each feature. If None, all samples are
-            equally weighted.
 
         Returns
         -------
@@ -470,7 +467,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             The fitted model.
         """
         # Fit the base model
-        self.model.fit(X, y, sample_weight=sample_weight)
+        self.model.fit(X, y)
 
         if not hasattr(self.model, 'coef_'):
             raise RuntimeError(
@@ -483,10 +480,15 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         # Also normalize X if the base model did so.
         self.fit_intercept = getattr(self.model, 'fit_intercept', False)
         self.normalize = getattr(self.model, 'normalize', False)
-        X, y, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
+
+        X, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
-            normalize=self.normalize, copy=True, sample_weight=sample_weight,
+            normalize=self.normalize, copy=True, 
         )
+        if isinstance(self.model, RegressorMixin):
+            y = y_
+        else:
+            y_offset = 0
 
         # Ensure that y is a 2D array: n_samples x n_targets
         flat_y = y.ndim == 1
@@ -559,7 +561,6 @@ def get_args(updater):
         args = inspect.getargspec(updater).args
         ignore_args = {'self', 'X', 'y', 'pattern', 'normalizer', 'coef'}
         args = [arg for arg in args if arg not in ignore_args]
-        print('optimizable args:', args)
 
     return args
 
@@ -616,7 +617,7 @@ class WorkbenchOptimizer(Workbench):
             self.optimizer_options.update(optimizer_options)
 
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X, y):
         """Fit the model to the data and optimize all parameters.
 
         Parameters
@@ -625,9 +626,6 @@ class WorkbenchOptimizer(Workbench):
             The data to fit the model to.
         y : ndarray, shape (n_features, n_targets)
             The target labels.
-        sample_weight : nparray, shape (n_samples) | None
-            Weighting factors for each feature. If None, all samples are
-            equally weighted.
 
         Returns
         -------
@@ -641,10 +639,15 @@ class WorkbenchOptimizer(Workbench):
         # Also normalize X if the base model did so.
         self.fit_intercept = getattr(self.model, 'fit_intercept', False)
         self.normalize = getattr(self.model, 'normalize', False)
-        X, y, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
+        X, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
-            normalize=self.normalize, copy=True, sample_weight=sample_weight,
+            normalize=self.normalize, copy=True, 
         )
+
+        if isinstance(self.model, RegressorMixin):
+            y = y_
+        else:
+            y_offset = 0
 
         n_samples, n_features = X.shape
 
@@ -735,6 +738,8 @@ class WorkbenchOptimizer(Workbench):
                        normalizer_modifier_params, score))
             return -score
 
+        x0=self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0
+        bounds=self.cov_param_bounds + self.pattern_param_bounds + self.normalizer_param_bounds
         params = minimize(
             score,
             x0=self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0,
