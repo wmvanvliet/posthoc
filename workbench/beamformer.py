@@ -114,7 +114,8 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
 
         # Compute weights
         coef, _ = _compute_weights(X, None, self.template.T, self.cov_modifier,
-                                   self.cov_updater, self.method)
+                                   self.cov_updater, None,
+                                   self.method)
 
         # The default normalizer constructs a unit-gain LCMV beamformer
         normalizer = [c.dot(p) for c, p in zip(coef, self.template)]

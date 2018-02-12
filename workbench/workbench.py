@@ -689,18 +689,12 @@ class WorkbenchOptimizer(Workbench):
             method = self.method
 
         # Compute patterns and normalizers for all LOO iterations
-        Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
-        Ns = np.empty((n_samples, n_targets, n_targets), dtype=np.float)
-        patterns = loo_utils.loo_patterns_from_model(self.model, X, y,
-                                                     verbose=self.verbose)
-        for i, (pattern, normalizer) in enumerate(patterns):
-            Ps[i] = pattern
-            Ns[i] = normalizer
-
+        Ps, Ns = self._loo_patterns_normalizers(X, y)
         if method == 'traditional':
             cov_X = X.T.dot(X)
 
         cache = dict()
+        self.log_ = []  # Keeps track of the tried parameters and their score
 
         def score(args):
             # Convert params to a tuple, so it can be hashed
@@ -730,6 +724,7 @@ class WorkbenchOptimizer(Workbench):
                                       normalizer_modifier_params, cache)
 
             score = scorer(identity_estimator, y.ravel(), y_hat.ravel())
+            self.log_.append(args.tolist() + [score])
 
             if self.verbose:
                 print('cov_updater_params=%s, pattern_modifier_params=%s, '
@@ -738,8 +733,6 @@ class WorkbenchOptimizer(Workbench):
                        normalizer_modifier_params, score))
             return -score
 
-        x0=self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0
-        bounds=self.cov_param_bounds + self.pattern_param_bounds + self.normalizer_param_bounds
         params = minimize(
             score,
             x0=self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0,
@@ -786,6 +779,19 @@ class WorkbenchOptimizer(Workbench):
         self._set_intercept(X_offset, y_offset, X_scale)
 
         return self
+
+    def _loo_patterns_normalizers(self, X, y):
+        """Construct arrays of patterns and normalizers for each LOO iteration."""
+        n_samples, n_features = X.shape
+        n_targets = y.shape[1]
+
+        Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
+        Ns = np.empty((n_samples, n_targets, n_targets), dtype=np.float)
+        patterns = loo_utils.loo_patterns_from_model(self.model, X, y,
+                                                     verbose=self.verbose)
+        for i, (pattern, normalizer) in enumerate(patterns):
+            Ps[i] = pattern
+            Ns[i] = normalizer
 
 
 def do_loo(X, y, Ps, Ns, cov_X, cov_modifier, cov_updater, cov_updater_params,
