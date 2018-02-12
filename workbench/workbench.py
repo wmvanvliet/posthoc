@@ -793,6 +793,8 @@ class WorkbenchOptimizer(Workbench):
             Ps[i] = pattern
             Ns[i] = normalizer
 
+        return Ps, Ns
+
 
 def do_loo(X, y, Ps, Ns, cov_X, cov_modifier, cov_updater, cov_updater_params,
            pattern_modifier, pattern_modifier_params, normalizer_modifier,
