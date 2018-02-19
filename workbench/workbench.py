@@ -7,7 +7,7 @@ import numpy as np
 from scipy.optimize import minimize
 from numpy.linalg import multi_dot, pinv
 
-from sklearn.base import TransformerMixin, RegressorMixin, ClassifierMixin
+from sklearn.base import TransformerMixin, RegressorMixin
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model.base import LinearModel
 from sklearn.metrics.scorer import check_scoring
@@ -655,7 +655,6 @@ class WorkbenchOptimizer(Workbench):
         flat_y = y.ndim == 1
         if flat_y:
             y = np.atleast_2d(y).T
-        n_targets = y.shape[1]
 
         if is_updater(self.cov_updater):
             # Initialize the CovUpdater object

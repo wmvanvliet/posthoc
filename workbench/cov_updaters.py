@@ -43,12 +43,18 @@ class CovUpdater(object):
 
 
 class ShrinkageUpdater(CovUpdater):
-    def __init__(self, alpha=1.0):
+    def __init__(self, alpha=1.0, scale_by_trace=True):
         CovUpdater.__init__(self, None)
         self.alpha = alpha
+        self.scale_by_trace = scale_by_trace
+        if not scale_by_trace:
+            self._scale = 1.
 
     def fit(self, X, y):
-        self._scale = np.trace(X.T.dot(X)) / X.shape[1]
+        if self.scale_by_trace:
+            self._scale = np.trace(X.T.dot(X)) / X.shape[1]
+        else:
+            self._scale = 1.
         return self
 
     def update(self, alpha=None):
@@ -65,7 +71,7 @@ class ShrinkageUpdater(CovUpdater):
         return X
 
     def dot(self, X):
-        return self.alpha * X
+        return self.alpha * self.scale_by_trace * X
 
     def inv(self):
         return ShrinkageUpdater(1 / float(self.alpha))
