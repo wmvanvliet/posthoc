@@ -9,7 +9,7 @@ import numpy as np
 from workbench import Workbench, WorkbenchOptimizer, ShrinkageUpdater
 
 
-def _gen_data(noise_scale=2, zero_mean=False):
+def _gen_data(noise_scale=2, zero_mean=False, N=1000):
     """Generate some testing data.
 
     Parameters
@@ -19,6 +19,8 @@ def _gen_data(noise_scale=2, zero_mean=False):
     zero_mean : bool
         Whether X and y should be zero-mean (across samples) or not.
         Defaults to False.
+    N : int
+        Number of samples to generate. Defaults to 1000.
 
     Returns
     -------
@@ -33,7 +35,6 @@ def _gen_data(noise_scale=2, zero_mean=False):
     # Fix random seed for consistent tests
     random = np.random.RandomState(42)
 
-    N = 1000  # Number of samples
     M = 5  # Number of features
 
     # Y has 3 targets and the following covariance:
@@ -192,12 +193,12 @@ def test_ridge_regression():
     _compare_models(wb, ridge, X[test], rtol=1E-5)
 
     # Test using a CovUpdater object
-    wb = Workbench(ols, cov_updater=ShrinkageUpdater(alpha),
-                   method='traditional')
+    cov_updater = ShrinkageUpdater(alpha, scale_by_trace=False)
+    wb = Workbench(ols, cov_updater=cov_updater, method='traditional')
     wb.fit(X[train], y[train])
     _compare_models(wb, ridge, X[test])
 
-    wb = Workbench(ols, cov_updater=ShrinkageUpdater(alpha), method='kernel')
+    wb = Workbench(ols, cov_updater=cov_updater, method='kernel')
     wb.fit(X[train], y[train])
     _compare_models(wb, ridge, X[test], rtol=1E-5)
 
@@ -244,44 +245,31 @@ def test_post_hoc_modification():
 
 def test_workbench_optimizer():
     """Test using an optimizer to fine-tune parameters."""
-    X, y, A = _gen_data(noise_scale=50)
+    X, y, A = _gen_data(noise_scale=50, N=100)
 
-    train = np.arange(100)         # Samples used as training set
-    test = np.arange(100, len(X))  # Samples used as test set
-
-    # The OLS regressor we're going to try and optimize
-    ols = LinearRegression(normalize=True).fit(X[train], y[train])
-    ols_score = ols.score(X[test], y[test])
-
-    #for method in ['auto', 'traditional', 'kernel']:
-    for method in ['traditional']:
+    for method in ['auto', 'traditional', 'kernel']:
         wbo = WorkbenchOptimizer(LinearRegression(normalize=True),
                                  cov_updater=ShrinkageUpdater(), scoring='r2',
-                                 method=method, cov_param_x0=[0.1], cov_param_bounds=[(0, None)],
+                                 method=method, cov_param_x0=[0.2],
+                                 cov_param_bounds=[(0.1, None)],
                                  optimizer_options={'maxiter': 100})
-        wbo.fit(X[train], y[train])
-        wb_score = wbo.score(X[test], y[test])
+        wbo.fit(X, y)
 
         # Weights of the WorkbenchOptimizer should equal the weights of a
         # Workbench initialized with the optimal parameters.
         wb = Workbench(LinearRegression(normalize=True),
                        cov_updater=ShrinkageUpdater(*wbo.cov_updater_params_),
                        method=method)
-        wb.fit(X[train], y[train])
+        wb.fit(X, y)
         assert_allclose(wbo.coef_, wb.coef_)
         assert_allclose(wbo.intercept_, wb.intercept_)
 
         # Weights of the WorkbenchOptimizer should equal the weights of a
         # Ridge initialized with the optimal parameters.
         rr = Ridge(alpha=wbo.cov_updater_params_[0], normalize=True)
-        rr.fit(X[train], y[train])
+        rr.fit(X, y)
         assert_allclose(wbo.coef_, rr.coef_)
         assert_allclose(wbo.intercept_, rr.intercept_)
-        rr_score = rr.score(X[test], y[test])
-
-        # The optimized model should be better than the original one
-        print(wb_score, rr_score, ols_score)
-        #assert_greater(wb_score, ols_score)
 
 
 def test_workbench_optimizer2():
