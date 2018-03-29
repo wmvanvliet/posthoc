@@ -1,12 +1,15 @@
+"""
+Tools for efficient computation of various things in a leave-one-out manner.
+"""
 import numpy as np
 from numpy.linalg import pinv, multi_dot
 from sklearn.base import RegressorMixin
 from sklearn.model_selection import LeaveOneOut
-from sklearn.linear_model.base import LinearModel
+from sklearn.linear_model import LinearRegression
 import progressbar
 
 
-def start_progress_bar(n):
+def _start_progress_bar(n):
     return progressbar.ProgressBar(
         maxval=n,
         widgets=[
@@ -78,7 +81,7 @@ def loo_kern_inv(K):
     K1 = None
     K1_inv = None
     for i in range(len(K)):
-        if K1 is None or K1_inv is None:
+        if K1 is None:  # First iteration
             K1 = K[1:, :][:, 1:]
             K1_inv = pinv(K1)
             yield K1_inv
@@ -89,8 +92,52 @@ def loo_kern_inv(K):
             yield update_inv(K1, K1_inv, i - 1, v)
 
 
-def loo_linear_regression(X, y, centered=False):
-    """Generate regression coefficients for leave-one-out iterations.
+def loo_mean_norm(X, return_norm=True):
+    """Compute the mean() and L2 norm of a matrix in a leave-one-out manner.
+
+    Optimizes things by computing updates to the mean and L2 norm instead of
+    re-computing them for each iteration.
+
+    Parameters
+    ----------
+    X : ndarray, shape (n_samples, n_features)
+        The data.
+    return_norm : bool
+        Whether to also return the leave-one-out L2 norm. Defaults to True.
+
+    Yields
+    ------
+    X_mean : float
+        The row-wise mean for X with the i'th row removed.
+    X_norm : float (optional)
+        The row-wise L2 norm of (X - X_mean) with the i-th row removed.
+        Only returned when ``return_norm=True`` is specified.
+
+    References
+    ----------
+    https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online
+    """
+    X = np.asarray(X)
+    n = len(X)
+
+    X_mean = X.mean(axis=0, keepdims=True)
+    offsets = (X - X_mean)  # Offsets from the mean
+    mean_deltas = offsets / (n - 1)
+
+    if return_norm:
+        X_var = X.var(axis=0, keepdims=True)
+
+    for mean_delta, offset, x_i in zip(mean_deltas, offsets, X):
+        X_mean_ = X_mean - mean_delta
+        if return_norm:
+            X_norm_ = np.sqrt((n * X_var - offset * (x_i - X_mean_)))
+            yield X_mean_, X_norm_
+        else:
+            yield X_mean
+
+
+def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
+    """Generate OLS regression coefficients for leave-one-out iterations.
 
     Employs an efficient algorithm described in [1].
 
@@ -100,35 +147,51 @@ def loo_linear_regression(X, y, centered=False):
         The data.
     y : ndarray, shape (n_samples, n_targets)
         The labels.
-    centered : bool
-        Whether X and y are already centered. Defaults to False.
+    normalize : bool
+        Whether to normalize the data. Defaults to False.
+    fit_intercept : bool
+        Whether to fit the intercept. Defaults to True.
 
     Yields
     ------
     coeff : ndarray, shape (n_features, n_targets)
         Coefficients for linear regression with the i'th sample left out.
+        No intercept is provided.
 
     References
     ----------
     [1] George A. F. Seber and Alan J. Lee. Linear Regression Analysis
-        (2nd edition, 2003), pp 357.
+        (2nd edition, 2003), page 357.
     """
-    if not centered:
-        X = X - X.mean(axis=0, keepdims=True)
-        y = y - y.mean(axis=0, keepdims=True)
+    n_samples, n_features = X.shape
+
+    if normalize:
+        X = (X - np.mean(X, axis=0))
+        X_scale = np.linalg.norm(X, axis=0, keepdims=True)
+        X /= X_scale
+    if fit_intercept:
+        # Fit the intercept by adding a column of ones to the data
+        X = np.hstack((X, np.ones((len(X), 1))))
 
     cov_inv = pinv(X.T.dot(X))
     c = cov_inv.dot(X.T)
     hat_matrix_diag = np.diag(X.dot(c))
-    coef_old = c.dot(y)
+    coeff_old = c.dot(y)
+    errors = y - X.dot(coeff_old)
 
-    n_samples = len(X)
     for i in range(n_samples):
         x_i = X[[i]].T
-        y_i = y[i]
-        update = -(cov_inv.dot(x_i).dot(y_i - x_i.dot(coef_old)) /
-                   (1 - hat_matrix_diag[i]))
-        yield coef_old + update
+        e_i = errors[[i]]
+        h_i = hat_matrix_diag[i]
+        coeff_update = multi_dot((cov_inv, x_i, e_i)) / (1 - h_i)
+        coeff = (coeff_old - coeff_update).T
+        if fit_intercept:
+            # Ignore the intercept coefficients
+            coeff = coeff[:, :-1]
+        if normalize:
+            coeff /= X_scale
+
+        yield coeff
 
 
 def loo_patterns_from_model(model, X, y, verbose=False):
@@ -137,9 +200,8 @@ def loo_patterns_from_model(model, X, y, verbose=False):
     Patterns are computed with the Haufe trick [1]:
         A = cov_X @ model.coeff_ @ precision_y_hat
 
-
     Performs optimizations when the model is
-    `sklearn.linear_model.LinearRegression` or `sklearn.linear_model.RidgeCV`.
+    ``sklearn.linear_model.LinearRegression``
 
     Parameters
     ----------
@@ -156,38 +218,59 @@ def loo_patterns_from_model(model, X, y, verbose=False):
     ------
     pattern : ndarray, shape (n_features, n_targets)
         The pattern computed for the model fitted to the data with the i'th
-        sample left out.
+        sample left out. If the model performs normalization, this is reflected
+        in the pattern.
     """
     n_samples = len(X)
 
     if verbose:
         print('Computing patterns for each leave-one-out iteration...')
-        pbar = start_progress_bar(n_samples)
 
     # Try to determine how the model normalizes the data
     normalize = hasattr(model, 'normalize') and model.normalize
     fit_intercept = hasattr(model, 'fit_intercept') and model.fit_intercept
+    if verbose:
+        print('Fit intercept:', 'yes' if fit_intercept else 'no')
+        print('Normalize:', 'yes' if normalize else 'no')
+
+    if fit_intercept or normalize:
+        X_normalizer = loo_mean_norm(X)
+        y_normalizer = loo_mean_norm(y, return_norm=False)
+
+    if type(model) == LinearRegression:  # subclasses _not_ supported!
+        print('Choosing optimized code-path for LinearRegression() model.')
+        coeff_generator = loo_linear_regression(X, y, normalize, fit_intercept)
+
+    if verbose:
+        pbar = _start_progress_bar(n_samples)
 
     for train, _ in LeaveOneOut().split(X, y):
-        X_, y__, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
-            X=X[train], y=y[train], fit_intercept=fit_intercept,
-            normalize=normalize, copy=True, sample_weight=None,
-        )
+        X_ = X[train]
+        y_ = y[train]
+        if fit_intercept:
+            X_offset, X_scale = next(X_normalizer)
+            X_ = X_ - X_offset
+            if normalize:
+                X_ /= X_scale
+            if isinstance(model, RegressorMixin):
+                y_offset = next(y_normalizer)
+                y_ = y_ - y_offset
 
-        if isinstance(model, RegressorMixin):
-            y_ = y__
+        if type(model) == LinearRegression:  # subclasses _not_ supported!
+            coeff = next(coeff_generator)
+            if normalize:
+                coeff *= X_scale
         else:
-            y_ = y[train]
+            model.fit(X_, y_)
+            coeff = model.coef_
+            if not hasattr(model, 'coef_'):
+                raise RuntimeError(
+                    'Model does not have a `coef_` attribute after fitting. '
+                    'This does not seem to be a linear model following the '
+                    'Scikit-Learn API.'
+                )
 
-        model.fit(X_, y_)
-        if not hasattr(model, 'coef_'):
-            raise RuntimeError(
-                'Model does not have a `coef_` attribute after fitting. '
-                'This does not seem to be a linear model following the '
-                'Scikit-Learn API.'
-            )
-
-        y_hat = X_.dot(model.coef_.T)
+        y_hat = X_.dot(coeff.T)
         if y_hat.ndim == 1:
             y_hat = y_hat[:, np.newaxis]
 
@@ -195,7 +278,7 @@ def loo_patterns_from_model(model, X, y, verbose=False):
 
         # Compute the pattern from the base model filter weights,
         # conforming equation 6 from Haufe2014.
-        pattern = multi_dot((X_.T, X_, model.coef_.T, pinv(normalizer)))
+        pattern = multi_dot((X_.T, X_, coeff.T, pinv(normalizer)))
 
         if verbose:
             pbar.update(pbar.value + 1)

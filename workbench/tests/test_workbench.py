@@ -297,7 +297,8 @@ def test_workbench_optimizer2():
                             pattern_modifier=pattern_modifier,
                             cov_param_x0=[0.5], cov_param_bounds=[(0, 1)],
                             pattern_param_x0=[0.5],
-                            pattern_param_bounds=[(0, 1)], method='traditional', scoring='r2')
+                            pattern_param_bounds=[(0, 1)],
+                            method='traditional', scoring='r2')
     wb.fit(X[train], y[train])
     wb_score = wb.score(X[test], y[test])
 
