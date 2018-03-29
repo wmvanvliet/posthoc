@@ -137,7 +137,7 @@ def loo_mean_norm(X, return_norm=True):
 
 
 def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
-    """Generate OLS regression coefficients for leave-one-out iterations.
+    """Generate OLS regression coeficients for leave-one-out iterations.
 
     Employs an efficient algorithm described in [1].
 
@@ -154,8 +154,8 @@ def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
 
     Yields
     ------
-    coeff : ndarray, shape (n_features, n_targets)
-        Coefficients for linear regression with the i'th sample left out.
+    coef : ndarray, shape (n_features, n_targets)
+        coeficients for linear regression with the i'th sample left out.
         No intercept is provided.
 
     References
@@ -176,29 +176,32 @@ def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
     cov_inv = pinv(X.T.dot(X))
     c = cov_inv.dot(X.T)
     hat_matrix_diag = np.diag(X.dot(c))
-    coeff_old = c.dot(y)
-    errors = y - X.dot(coeff_old)
+    coef_old = c.dot(y)
+    errors = y - X.dot(coef_old)
 
     for i in range(n_samples):
         x_i = X[[i]].T
         e_i = errors[[i]]
         h_i = hat_matrix_diag[i]
-        coeff_update = multi_dot((cov_inv, x_i, e_i)) / (1 - h_i)
-        coeff = (coeff_old - coeff_update).T
+        if h_i != 1:
+            coef_update = multi_dot((cov_inv, x_i, e_i)) / (1 - h_i)
+        else:
+            coef_update = np.zeros_like(coef_old)
+        coef = (coef_old - coef_update).T
         if fit_intercept:
-            # Ignore the intercept coefficients
-            coeff = coeff[:, :-1]
+            # Ignore the intercept coeficients
+            coef = coef[:, :-1]
         if normalize:
-            coeff /= X_scale
+            coef /= X_scale
 
-        yield coeff
+        yield coef
 
 
 def loo_patterns_from_model(model, X, y, verbose=False):
     """Generate patterns for leave-one-out iterations of the given model.
 
     Patterns are computed with the Haufe trick [1]:
-        A = cov_X @ model.coeff_ @ precision_y_hat
+        A = cov_X @ model.coef_ @ precision_y_hat
 
     Performs optimizations when the model is
     ``sklearn.linear_model.LinearRegression``
@@ -239,7 +242,7 @@ def loo_patterns_from_model(model, X, y, verbose=False):
 
     if type(model) == LinearRegression:  # subclasses _not_ supported!
         print('Choosing optimized code-path for LinearRegression() model.')
-        coeff_generator = loo_linear_regression(X, y, normalize, fit_intercept)
+        coef_generator = loo_linear_regression(X, y, normalize, fit_intercept)
 
     if verbose:
         pbar = _start_progress_bar(n_samples)
@@ -257,12 +260,12 @@ def loo_patterns_from_model(model, X, y, verbose=False):
                 y_ = y_ - y_offset
 
         if type(model) == LinearRegression:  # subclasses _not_ supported!
-            coeff = next(coeff_generator)
+            coef = next(coef_generator)
             if normalize:
-                coeff *= X_scale
+                coef *= X_scale
         else:
             model.fit(X_, y_)
-            coeff = model.coef_
+            coef = model.coef_
             if not hasattr(model, 'coef_'):
                 raise RuntimeError(
                     'Model does not have a `coef_` attribute after fitting. '
@@ -270,7 +273,7 @@ def loo_patterns_from_model(model, X, y, verbose=False):
                     'Scikit-Learn API.'
                 )
 
-        y_hat = X_.dot(coeff.T)
+        y_hat = X_.dot(coef.T)
         if y_hat.ndim == 1:
             y_hat = y_hat[:, np.newaxis]
 
@@ -278,7 +281,7 @@ def loo_patterns_from_model(model, X, y, verbose=False):
 
         # Compute the pattern from the base model filter weights,
         # conforming equation 6 from Haufe2014.
-        pattern = multi_dot((X_.T, X_, coeff.T, pinv(normalizer)))
+        pattern = multi_dot((X_.T, X_, coef.T, pinv(normalizer)))
 
         if verbose:
             pbar.update(pbar.value + 1)
