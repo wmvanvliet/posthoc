@@ -7,79 +7,7 @@ from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 import numpy as np
 
 from workbench import Workbench, WorkbenchOptimizer, ShrinkageUpdater
-
-
-def _gen_data(noise_scale=2, zero_mean=False, N=1000):
-    """Generate some testing data.
-
-    Parameters
-    ----------
-    noise_scale : float
-        The amount of noise (in standard deviations) to add to the data.
-    zero_mean : bool
-        Whether X and y should be zero-mean (across samples) or not.
-        Defaults to False.
-    N : int
-        Number of samples to generate. Defaults to 1000.
-
-    Returns
-    -------
-    X : ndarray, shape (n_samples, n_features)
-        The measured data.
-    Y : ndarray, shape (n_samples, n_targets)
-        The latent variables generating the data.
-    A : ndarray, shape (n_features, n_targets)
-        The forward model, mapping the latent variables (=Y) to the measured
-        data (=X).
-    """
-    # Fix random seed for consistent tests
-    random = np.random.RandomState(42)
-
-    M = 5  # Number of features
-
-    # Y has 3 targets and the following covariance:
-    cov_Y = np.array([
-        [10, 1, 2],
-        [1,  5, 1],
-        [2,  1, 3],
-    ]).astype(float)
-    mean_Y = np.array([1, -3, 7])
-    Y = random.multivariate_normal(mean_Y, cov_Y, size=N)
-    Y -= Y.mean(axis=0)
-
-    # The pattern (=forward model)
-    A = np.array([
-        [1, 10, -3],
-        [4,  1,  8],
-        [3, -2,  4],
-        [1,  1,  1],
-        [7,  6,  0],
-    ]).astype(float)
-
-    # The noise covariance matrix
-    cov_noise = np.array([
-        [1.25,  0.89,  1.06,  0.99,  1.27],
-        [0.89,  1.10,  1.17,  1.08,  1.14],
-        [1.06,  1.17,  1.32,  1.28,  1.36],
-        [0.99,  1.08,  1.28,  1.37,  1.34],
-        [1.27,  1.14,  1.36,  1.34,  1.60],
-    ])
-    mean_noise = np.zeros(M)
-    noise = random.multivariate_normal(mean_noise, cov_noise, size=N)
-
-    # Y = Y[:, :1]
-    # A = A[:1, :1]
-    # noise = noise[:, :1]
-
-    # Construct X
-    X = Y.dot(A.T)
-    X += noise_scale * noise
-
-    if zero_mean:
-        X -= X.mean(axis=0)
-        Y -= Y.mean(axis=0)
-
-    return X, Y, A
+from workbench.utils import gen_data
 
 
 def _compare_models(wb, base, X, atol=0, rtol=1E-7):
@@ -94,7 +22,7 @@ def _compare_models(wb, base, X, atol=0, rtol=1E-7):
 
 def test_pattern_computation():
     """Test computation of the pattern from a linear model."""
-    X, y, A = _gen_data(noise_scale=0)
+    X, y, A = gen_data(noise_scale=0)
 
     assert_true((X.std(axis=0) != 0).all())
     assert_true((X.mean(axis=0) != 0).all())
@@ -115,7 +43,7 @@ def test_pattern_computation():
 
 def test_identity_transform():
     """Test disassembling and re-assembling a model as-is."""
-    X, y, A = _gen_data()
+    X, y, A = gen_data()
     train = np.arange(500)  # Samples used as training set
     test = train + 500  # Samples used as test set
 
@@ -157,7 +85,7 @@ def test_identity_transform():
 
 def test_ridge_regression():
     """Test post-hoc adaptation of OLS to be a ridge regressor."""
-    X, y, A = _gen_data()
+    X, y, A = gen_data()
     train = np.arange(500)  # Samples used as training set
     test = train + 500  # Samples used as test set
 
@@ -205,7 +133,7 @@ def test_ridge_regression():
 
 def test_post_hoc_modification():
     """Test post-hoc modification of the model."""
-    X, y, A = _gen_data(noise_scale=10)
+    X, y, A = gen_data(noise_scale=10)
 
     train = np.arange(5)         # Samples used as training set
     test = np.arange(5, len(X))  # Samples used as test set
@@ -245,7 +173,7 @@ def test_post_hoc_modification():
 
 def test_workbench_optimizer():
     """Test using an optimizer to fine-tune parameters."""
-    X, y, A = _gen_data(noise_scale=50, N=100)
+    X, y, A = gen_data(noise_scale=50, N=100)
 
     for method in ['auto', 'traditional', 'kernel']:
         wbo = WorkbenchOptimizer(LinearRegression(normalize=True),
@@ -274,7 +202,7 @@ def test_workbench_optimizer():
 
 def test_workbench_optimizer2():
     """Test using an optimizer to fine-tune parameters."""
-    X, y, A = _gen_data(noise_scale=10)
+    X, y, A = gen_data(noise_scale=10)
 
     train = np.arange(5)         # Samples used as training set
     test = np.arange(5, len(X))  # Samples used as test set

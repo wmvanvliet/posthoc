@@ -73,10 +73,10 @@ def loo_kern_inv(K):
 
     Yields
     ------
-    K : ndarrays, shape (n_samples, n_samples)
-        The updated kernel matrices.
+    K : ndarray, shape (n_samples, n_samples)
+        The updated kernel matrix.
     K_inv : ndarray, shape (n_samples, n_samples)
-        The inverse of the updated kernel matrices.
+        The inverse of the updated kernel matrix.
     """
     K1 = None
     K1_inv = None
@@ -136,8 +136,8 @@ def loo_mean_norm(X, return_norm=True):
             yield X_mean
 
 
-def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
-    """Generate OLS regression coeficients for leave-one-out iterations.
+def loo_ols_regression(X, y, normalize=False, fit_intercept=True):
+    """Generate OLS regression coefficients for leave-one-out iterations.
 
     Employs an efficient algorithm described in [1].
 
@@ -163,7 +163,7 @@ def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
     [1] George A. F. Seber and Alan J. Lee. Linear Regression Analysis
         (2nd edition, 2003), page 357.
     """
-    n_samples, n_features = X.shape
+    n_samples = len(X)
 
     if normalize:
         X = (X - np.mean(X, axis=0))
@@ -171,7 +171,7 @@ def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
         X /= X_scale
     if fit_intercept:
         # Fit the intercept by adding a column of ones to the data
-        X = np.hstack((X, np.ones((len(X), 1))))
+        X = np.hstack((X, np.ones((n_samples, 1))))
 
     cov_inv = pinv(X.T.dot(X))
     c = cov_inv.dot(X.T)
@@ -197,7 +197,63 @@ def loo_linear_regression(X, y, normalize=False, fit_intercept=True):
         yield coef
 
 
-def loo_patterns_from_model(model, X, y, verbose=False):
+def loo_kernel_regression(X, y, normalize=False, fit_intercept=True):
+    """Generate kernel regression coefficients for leave-one-out iterations.
+
+    Parameters
+    ----------
+    X : ndarray, shape (n_samples, n_features)
+        The data.
+    y : ndarray, shape (n_samples, n_targets)
+        The labels.
+    normalize : bool
+        Whether to normalize the data. Defaults to False.
+    fit_intercept : bool
+        Whether to fit the intercept. Defaults to True.
+
+    Yields
+    ------
+    coef : ndarray, shape (n_features, n_targets)
+        coeficients for linear regression with the i'th sample left out.
+        No intercept is provided.
+    """
+    n_samples = len(X)
+
+    if normalize:
+        X = (X - np.mean(X, axis=0))
+        X_scale = np.linalg.norm(X, axis=0, keepdims=True)
+        X /= X_scale
+    if fit_intercept:
+        # Fit the intercept by adding a column of ones to the data
+        X = np.hstack((X, np.ones((n_samples, 1))))
+
+    K = X.dot(X.T)
+
+    X1 = None
+    y1 = None
+    for i, K_i in enumerate(loo_kern_inv(K)):
+        if X1 is None or y1 is None:  # First iteration
+            X1 = X[1:].copy()
+            y1 = y[1:].copy()
+        else:
+            if i >= 2:  # Put previous rows back
+                X1[i - 2] = X[i - 1]
+                y1[i - 2] = y[i - 1]
+            X1[i - 1] = X[0]
+            y1[i - 1] = y[0]
+
+        coef = X1.T.dot(K_i).dot(y1).T
+
+        if fit_intercept:
+            # Ignore the intercept coeficients
+            coef = coef[:, :-1]
+        if normalize:
+            coef /= X_scale
+
+        yield coef
+
+
+def loo_patterns_from_model(model, X, y, mode='auto', verbose=False):
     """Generate patterns for leave-one-out iterations of the given model.
 
     Patterns are computed with the Haufe trick [1]:
@@ -223,8 +279,15 @@ def loo_patterns_from_model(model, X, y, verbose=False):
         The pattern computed for the model fitted to the data with the i'th
         sample left out. If the model performs normalization, this is reflected
         in the pattern.
+    normalizer : ndarray, shape (n_targets, n_targets)
+        The normalizer computed from the data with the i'th sample left out.
     """
-    n_samples = len(X)
+    n_samples, n_features = X.shape
+    if mode == 'auto':
+        if n_samples >= n_features:
+            mode = 'traditional'
+        else:
+            mode = 'kernel'
 
     if verbose:
         print('Computing patterns for each leave-one-out iteration...')
@@ -242,7 +305,15 @@ def loo_patterns_from_model(model, X, y, verbose=False):
 
     if type(model) == LinearRegression:  # subclasses _not_ supported!
         print('Choosing optimized code-path for LinearRegression() model.')
-        coef_generator = loo_linear_regression(X, y, normalize, fit_intercept)
+        if mode == 'traditional':
+            print('Using OLS path.')
+            coef_gen = loo_ols_regression(X, y, normalize, fit_intercept)
+        elif mode == 'kernel':
+            print('Using kernel path.')
+            coef_gen = loo_kernel_regression(X, y, normalize, fit_intercept)
+        else:
+            raise ValueError('Invalid mode selected. Choose one of: '
+                             "'auto', 'traditional', or 'kernel'.")
 
     if verbose:
         pbar = _start_progress_bar(n_samples)
@@ -260,7 +331,7 @@ def loo_patterns_from_model(model, X, y, verbose=False):
                 y_ = y_ - y_offset
 
         if type(model) == LinearRegression:  # subclasses _not_ supported!
-            coef = next(coef_generator)
+            coef = next(coef_gen)
             if normalize:
                 coef *= X_scale
         else:

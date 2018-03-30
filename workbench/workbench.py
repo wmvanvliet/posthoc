@@ -722,7 +722,7 @@ class WorkbenchOptimizer(Workbench):
                                       self.normalizer_modifier,
                                       normalizer_modifier_params, cache)
 
-            score = scorer(identity_estimator, y.ravel(), y_hat.ravel())
+            score = scorer(identity_estimator, y_hat.ravel(), y.ravel())
             self.log_.append(args.tolist() + [score])
 
             if self.verbose:
