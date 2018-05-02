@@ -322,6 +322,8 @@ def disassemble_modify_reassemble(W, X, y, cov_modifier=None, cov_updater=None,
     # Modify the pattern
     if pattern_modifier is not None:
         pattern = pattern_modifier(pattern, X, y, *pattern_modifier_params)
+    if pattern.ndim == 1:
+        pattern = pattern[:, np.newaxis]
 
     # Compute weights
     coef, cov_X = _compute_weights(X, y, pattern, cov_modifier=cov_modifier,
@@ -483,7 +485,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
 
         X, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
-            normalize=self.normalize, copy=True, 
+            normalize=self.normalize, copy=True,
         )
         if isinstance(self.model, RegressorMixin):
             y = y_
@@ -596,7 +598,8 @@ class WorkbenchOptimizer(Workbench):
                  pattern_modifier=None, pattern_param_x0=None,
                  pattern_param_bounds=None, normalizer_modifier=None,
                  normalizer_param_x0=None, normalizer_param_bounds=None,
-                 optimizer_options=None, method='auto', verbose=True,
+                 optimizer_options=None, method='auto',
+                 loo_patterns_method='auto', verbose=True,
                  scoring='neg_mean_squared_error'):
         Workbench.__init__(self, model, cov_modifier, cov_updater,
                            pattern_modifier, normalizer_modifier, method)
@@ -611,11 +614,11 @@ class WorkbenchOptimizer(Workbench):
 
         self.verbose = verbose
         self.scoring = scoring
+        self.loo_patterns_method = loo_patterns_method
 
         self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
         if optimizer_options is not None:
             self.optimizer_options.update(optimizer_options)
-
 
     def fit(self, X, y):
         """Fit the model to the data and optimize all parameters.
@@ -641,7 +644,7 @@ class WorkbenchOptimizer(Workbench):
         self.normalize = getattr(self.model, 'normalize', False)
         X, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
-            normalize=self.normalize, copy=True, 
+            normalize=self.normalize, copy=True,
         )
 
         if isinstance(self.model, RegressorMixin):
@@ -688,7 +691,8 @@ class WorkbenchOptimizer(Workbench):
             method = self.method
 
         # Compute patterns and normalizers for all LOO iterations
-        Ps, Ns = self._loo_patterns_normalizers(X, y)
+        Ps, Ns = self._loo_patterns_normalizers(
+            X, y, method=self.loo_patterns_method)
         if method == 'traditional':
             cov_X = X.T.dot(X)
 
@@ -734,9 +738,11 @@ class WorkbenchOptimizer(Workbench):
 
         params = minimize(
             score,
-            x0=self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0,
+            x0=(self.cov_param_x0 + self.pattern_param_x0 +
+                self.normalizer_param_x0),
             method='L-BFGS-B',
-            bounds=self.cov_param_bounds + self.pattern_param_bounds + self.normalizer_param_bounds,
+            bounds=(self.cov_param_bounds + self.pattern_param_bounds +
+                    self.normalizer_param_bounds),
             options=self.optimizer_options,
         ).x.tolist()
 
@@ -779,15 +785,16 @@ class WorkbenchOptimizer(Workbench):
 
         return self
 
-    def _loo_patterns_normalizers(self, X, y):
-        """Construct arrays of patterns and normalizers for each LOO iteration."""
+    def _loo_patterns_normalizers(self, X, y, method):
+        """Construct arrays of patterns and normalizers for each LOO iteration.
+        """
         n_samples, n_features = X.shape
         n_targets = y.shape[1]
 
         Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
         Ns = np.empty((n_samples, n_targets, n_targets), dtype=np.float)
-        patterns = loo_utils.loo_patterns_from_model(self.model, X, y,
-                                                     verbose=self.verbose)
+        patterns = loo_utils.loo_patterns_from_model(
+            self.model, X, y, method=method, verbose=self.verbose)
         for i, (pattern, normalizer) in enumerate(patterns):
             Ps[i] = pattern
             Ns[i] = normalizer
@@ -828,7 +835,7 @@ def do_loo(X, y, Ps, Ns, cov_X, cov_modifier, cov_updater, cov_updater_params,
 
         N = Ns[test[0]]
         if normalizer_modifier is not None:
-            N = normalizer_modifier(N, X, y, P, coef
+            N = normalizer_modifier(N, X, y, P, coef,
                                     *normalizer_modifier_params)
         N = np.atleast_2d(N)
         y_hat[test] = multi_dot((X[test], coef.T, N))

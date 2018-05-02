@@ -12,6 +12,18 @@ from workbench.utils import gen_data
 from workbench.loo_utils import loo_patterns_from_model
 
 
+def test_loo_ols_normalizer():
+    X, y, A = gen_data(noise_scale=0.1, zero_mean=True)
+
+    loo_normalizers = []
+    loo_values = []
+    for train, test in LeaveOneOut().split(X, y):
+        m = LinearRegression(fit_intercept=False).fit(X[train], y[train])
+        y_hat = m.predict(X[train])
+        loo_values.append(m.predict(X[test]))
+        loo_normalizers.append(y_hat.T.dot(y_hat))
+
+
 def test_loo_patterns_from_model():
     X, y, A = gen_data(noise_scale=0.1)
 

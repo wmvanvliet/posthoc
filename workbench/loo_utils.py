@@ -22,11 +22,11 @@ def _start_progress_bar(n):
 
 
 def update_inv(X, X_inv, i, v):
-    """Computes a rank 1 update of the the inverse of a matrix.
+    """Computes a rank 1 update of the the inverse of a symmetrical matrix.
 
-    Given a symmerical matrix X, its inverse X^{-1}, this function computes the
-    inverse of Y, which is a copy of X, with the i'th row&column replaced by
-    given vector v.
+    Given a symmerical matrix X and its inverse X^{-1}, this function computes
+    the inverse of Y, which is a copy of X, with the i'th row&column replaced
+    by given vector v.
 
     Parameters
     ----------
@@ -39,10 +39,6 @@ def update_inv(X, X_inv, i, v):
     -------
     Y_inv : ndarray, shape (N, N)
         The inverse of Y.
-
-    Notes
-    -----
-    X needs to be a symmetrical (e.g. a covariance matrix).
     """
     U = v[:, np.newaxis] - X[:, [i]]
     mask = np.zeros((len(U), 1))
@@ -179,6 +175,8 @@ def loo_ols_regression(X, y, normalize=False, fit_intercept=True):
     coef_old = c.dot(y)
     errors = y - X.dot(coef_old)
 
+    # Compute updates to the regression weights for each leave-one-out
+    # permutation.
     for i in range(n_samples):
         x_i = X[[i]].T
         e_i = errors[[i]]
@@ -253,7 +251,51 @@ def loo_kernel_regression(X, y, normalize=False, fit_intercept=True):
         yield coef
 
 
-def loo_patterns_from_model(model, X, y, mode='auto', verbose=False):
+def loo_ols_values(X, y, normalize=False, fit_intercept=True):
+    """Generate OLS regression values for leave-one-out iterations.
+
+    Employs an efficient algorithm described in [1].
+
+    Parameters
+    ----------
+    X : ndarray, shape (n_samples, n_features)
+        The data.
+    y : ndarray, shape (n_samples, n_targets)
+        The labels.
+    normalize : bool
+        Whether to normalize the data. Defaults to False.
+    fit_intercept : bool
+        Whether to fit the intercept. Defaults to True.
+
+    Yields
+    ------
+    y_hat_loo : ndarray, shape (n_samples, n_targets)
+        For each sample, the predicted regression value computed by fitting the
+        regressor on all other sample and applied to the current sample.
+
+    References
+    ----------
+    [1] George A. F. Seber and Alan J. Lee. Linear Regression Analysis
+        (2nd edition, 2003), page 357.
+    """
+    if fit_intercept:
+        X = (X - np.mean(X, axis=0))
+    if normalize:
+        X_scale = np.linalg.norm(X, axis=0, keepdims=True)
+        X /= X_scale
+
+    cov_inv = pinv(X.T.dot(X))
+    c = cov_inv.dot(X.T)
+    hat_matrix_diag = np.diag(X.dot(c))
+    coef = c.dot(y)
+    errors = y - X.dot(coef)
+    loo_errors = errors / (1 - hat_matrix_diag[:, np.newaxis])
+    y_hat_loo = y - loo_errors
+
+    return y_hat_loo
+
+
+def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
     """Generate patterns for leave-one-out iterations of the given model.
 
     Patterns are computed with the Haufe trick [1]:
@@ -270,6 +312,9 @@ def loo_patterns_from_model(model, X, y, mode='auto', verbose=False):
         The data.
     y : ndarray, shape (n_samples, n_targets)
         The labels.
+    method : 'auto' | 'traditional' | 'kernel'
+        Method of producing LOO patterns when the model is
+        `sklearn.linear_model.LinearRegression`.
     verbose : bool
         Print out a progressbar. Defaults to False.
 
@@ -283,11 +328,11 @@ def loo_patterns_from_model(model, X, y, mode='auto', verbose=False):
         The normalizer computed from the data with the i'th sample left out.
     """
     n_samples, n_features = X.shape
-    if mode == 'auto':
+    if method == 'auto':
         if n_samples >= n_features:
-            mode = 'traditional'
+            method = 'traditional'
         else:
-            mode = 'kernel'
+            method = 'kernel'
 
     if verbose:
         print('Computing patterns for each leave-one-out iteration...')
@@ -305,10 +350,10 @@ def loo_patterns_from_model(model, X, y, mode='auto', verbose=False):
 
     if type(model) == LinearRegression:  # subclasses _not_ supported!
         print('Choosing optimized code-path for LinearRegression() model.')
-        if mode == 'traditional':
+        if method == 'traditional':
             print('Using OLS path.')
             coef_gen = loo_ols_regression(X, y, normalize, fit_intercept)
-        elif mode == 'kernel':
+        elif method == 'kernel':
             print('Using kernel path.')
             coef_gen = loo_kernel_regression(X, y, normalize, fit_intercept)
         else:
