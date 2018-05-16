@@ -6,7 +6,7 @@ if __name__ == "__main__":
     if os.path.exists('MANIFEST'):
         os.remove('MANIFEST')
 
-    setup(name='conpy',
+    setup(name='workbench',
           maintainer='Marijn van Vliet',
           maintainer_email='w.m.vanvliet@gmail.com',
           description='A workbench for linear models',
