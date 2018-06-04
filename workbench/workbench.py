@@ -825,7 +825,7 @@ def do_loo(X, y, Ps, Ns, cov_X, cov_modifier, cov_updater, cov_updater_params,
         cache[cov_updater_params] = cov_X_inv
 
     # Do leave-one-out crossvalidation
-    y_hat = np.zeros_like(y)
+    y_hat = np.zeros_like(y, dtype=float)
     for train, test in LeaveOneOut().split(X, y):
         P = Ps[test[0]]
         if pattern_modifier is not None:
@@ -868,7 +868,7 @@ def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
         cache[cov_updater_params] = (cov_update_inv, G, K)
 
     # Do efficient leave-one-out crossvalidation
-    y_hat = np.zeros_like(y)
+    y_hat = np.zeros_like(y, dtype=float)
     G1 = None
     X1 = None
     y1 = None
