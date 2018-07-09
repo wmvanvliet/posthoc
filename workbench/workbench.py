@@ -523,6 +523,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
 
         # Set intercept and undo normalization
         self._set_intercept(X_offset, y_offset, X_scale)
+        self.inverse_intercept_ = X_offset - np.dot(y_offset, self.pattern_.T)
 
         return self
 
@@ -532,7 +533,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         Parameters
         ----------
         X : ndarray, shape (n_items, n_features)
-            The data.
+            The data to apply the model to.
 
         Returns
         -------
@@ -540,6 +541,24 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             The transformed data.
         """
         return self.predict(X)
+
+    def inverse_predict(self, y):
+        """Apply the inverse of the linear model to the targets.
+
+        If a linear model predicts y from X: ``y_hat = X @ self.coef_.T``
+        then this function predicts X from y: ``X_hat = y @ self.pattern_.T``
+
+        Parameters
+        ----------
+        y : ndarray, shape (n_items, n_targets)
+            The targets to predict the original data for.
+
+        Returns
+        -------
+        X_hat : ndarray, shape (n_items, n_features)
+            The predicted data.
+        """
+        return y @ self.pattern_.T + self.inverse_intercept_
 
 
 def get_args(updater):

@@ -41,6 +41,14 @@ def test_pattern_computation():
         assert_allclose(wb.pattern_, A, atol=1E-7)
 
 
+def test_inverse_predict():
+    X, y, _ = gen_data(noise_scale=0)
+    w = Workbench(LinearRegression()).fit(X, y)
+    m = LinearRegression().fit(y, X)
+    assert_allclose(w.pattern_, m.coef_, atol=1E-15)
+    assert_allclose(w.inverse_predict(y), m.predict(y))
+
+
 def test_identity_transform():
     """Test disassembling and re-assembling a model as-is."""
     X, y, A = gen_data()
