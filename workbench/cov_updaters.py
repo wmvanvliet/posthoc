@@ -52,7 +52,7 @@ class ShrinkageUpdater(CovUpdater):
 
     def fit(self, X, y):
         if self.scale_by_trace:
-            self._scale = np.trace(X.T.dot(X)) / X.shape[1]
+            self._scale = np.sum(X ** 2) / X.shape[1]
         else:
             self._scale = 1.
         return self
@@ -71,10 +71,12 @@ class ShrinkageUpdater(CovUpdater):
         return X
 
     def dot(self, X):
-        return self.alpha * self.scale_by_trace * X
+        return self.alpha * self._scale * X
 
     def inv(self):
-        return ShrinkageUpdater(1 / float(self.alpha))
+        k = ShrinkageUpdater(1 / float(self.alpha), self.scale_by_trace)
+        k._scale = 1 / float(self._scale)
+        return k
 
     def get_x0(self):
         return [self.alpha]
@@ -83,7 +85,8 @@ class ShrinkageUpdater(CovUpdater):
         return [(0.1, None)]
 
     def __repr__(self):
-        return 'ShrinkageUpdater(alpha=%f)' % self.alpha
+        return ('ShrinkageUpdater(alpha=%f, scale_by_trace=%s)' %
+                (self.alpha, self.scale_by_trace))
 
 
 class KroneckerUpdater(CovUpdater):

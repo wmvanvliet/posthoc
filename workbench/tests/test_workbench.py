@@ -42,9 +42,10 @@ def test_pattern_computation():
 
 
 def test_inverse_predict():
-    X, y, _ = gen_data(noise_scale=0)
+    X, y, _ = gen_data()
     w = Workbench(LinearRegression()).fit(X, y)
-    m = LinearRegression().fit(y, X)
+    y_hat = w.predict(X)
+    m = LinearRegression().fit(y_hat, X)
     assert_allclose(w.pattern_, m.coef_, atol=1E-15)
     assert_allclose(w.inverse_predict(y), m.predict(y))
 

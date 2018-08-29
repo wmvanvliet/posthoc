@@ -223,8 +223,8 @@ def _compute_weights(X, y, pattern, cov_modifier=None, cov_updater=None,
         K = X.dot(G)
         K.flat[::n_samples + 1] += 1
         K_inv = np.linalg.pinv(K)
-        GammaP = cov_update_inv.dot(pattern)
-        coef = (GammaP - multi_dot((G, K_inv, X, GammaP))).T
+        AP = cov_update_inv.dot(pattern)
+        coef = (AP - multi_dot((G, K_inv, X, AP))).T
         return coef, None
 
     else:
@@ -490,7 +490,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         if isinstance(self.model, RegressorMixin):
             y = y_
         else:
-            y_offset = 0
+            y_offset = 0.
 
         # Ensure that y is a 2D array: n_samples x n_targets
         flat_y = y.ndim == 1
