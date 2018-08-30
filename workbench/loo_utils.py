@@ -21,6 +21,47 @@ def _start_progress_bar(n):
     ).start()
 
 
+def loo(X, axis=0):
+    """Generates leave-one-out selections along a given axis.
+
+    A single copy is being made of the array, all other operations are
+    performed in-place in the copy. The ordering of the items in the array is
+    not guaranteed.
+
+    Parameters
+    ----------
+    X : ndarray
+        The array to produce leave-one-out selections of.
+    axis : int (default: 0)
+        The axis along which to perform the leave-one-out selections.
+
+    Yields
+    ------
+    X_loo : ndarray
+        A copy of X, with the n'th item left out.
+    """
+    # Generate an index that cuts off the top along the desired axis.
+    # We use slices to avoid copying data.
+    cut_top = tuple([slice(None) if i != axis else slice(1, None)
+                    for i in range(X.ndim)])
+
+    # Generate an index that returns a slice at a given index along the desired
+    # axis, without copying data.
+    def slice_at(ind):
+        return tuple([slice(None) if i != axis else ind
+                      for i in range(X.ndim)])
+
+    X_loo = None
+    for i in range(X.shape[axis]):
+        if X_loo is None:
+            X_loo = X[cut_top].copy()
+        else:
+            if i >= 2:
+                X_loo[slice_at(i - 2)] = X[slice_at(i - 1)]
+            X_loo[slice_at(i - 1)] = X[slice_at(0)]
+        yield X_loo
+
+
 def update_inv(X, X_inv, i, v):
     """Computes a rank 1 update of the the inverse of a symmetrical matrix.
 
@@ -60,7 +101,7 @@ def update_inv(X, X_inv, i, v):
 def loo_kern_inv(K):
     """A generator for leave-one-out crossval iterations from a kernel matrix.
 
-    Returns version of K and K^{-1} where the i'th row&column are removed.
+    Returns versions of K^{-1} where the i'th row&column are removed.
 
     Parameters
     ----------
@@ -69,8 +110,6 @@ def loo_kern_inv(K):
 
     Yields
     ------
-    K : ndarray, shape (n_samples, n_samples)
-        The updated kernel matrix.
     K_inv : ndarray, shape (n_samples, n_samples)
         The inverse of the updated kernel matrix.
     """

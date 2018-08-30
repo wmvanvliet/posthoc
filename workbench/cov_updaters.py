@@ -2,9 +2,6 @@ import numpy as np
 
 
 class CovUpdater(object):
-    def __init__(self, data):
-        self._data = data
-
     def fit(self, X, y):
         return self
 
@@ -19,6 +16,9 @@ class CovUpdater(object):
 
     def inv(self):
         raise NotImplemented('This function must be implemented in a subclass')
+
+    def get_scaler(self):
+        return 1
 
     def get_x0(self):
         return None
@@ -44,7 +44,6 @@ class CovUpdater(object):
 
 class ShrinkageUpdater(CovUpdater):
     def __init__(self, alpha=1.0, scale_by_trace=True):
-        CovUpdater.__init__(self, None)
         self.alpha = alpha
         self.scale_by_trace = scale_by_trace
         if not scale_by_trace:
@@ -99,7 +98,6 @@ class KroneckerUpdater(CovUpdater):
     """
     def __init__(self, outer_size=None, inner_size=None, alpha=1.0,
                  beta=1.0):
-        CovUpdater.__init__(self, None)
         if outer_size is None and inner_size is None:
             raise ValueError('Either the `outer_size` or `inner_size` '
                              'parameter must be specified.')

@@ -15,10 +15,11 @@ from sklearn.model_selection import LeaveOneOut
 
 from . import loo_utils
 from .cov_updaters import CovUpdater
+from .cov_modifiers import CovModifier
 
 
 def is_updater(x):
-    return isinstance(x, CovUpdater)
+    return isinstance(x, CovUpdater) or isinstance(x, CovModifier)
 
 
 def compute_pattern(W, X, return_y_hat=False):
@@ -211,20 +212,21 @@ def _compute_weights(X, y, pattern, cov_modifier=None, cov_updater=None,
         # Get the covariance updater from the function supplied by the user
         if is_updater(cov_updater):
             # User supplied a CovUpdater object for detailed control
-            cov_update = cov_updater.fit(X, y).update(*cov_modifier_params)
-            cov_update_inv = cov_update.inv()
+            # cov_update = cov_updater.fit(X, y).update(*cov_modifier_params)
+            # cov_update_inv = cov_update.inv()
+            coef = cov_updater.fit(X, y).inv_dot(X, pattern).T
         else:
             # User supplied an updater function
             cov_update = cov_updater(X, y, *cov_modifier_params)
             cov_update_inv = np.linalg.pinv(cov_update)
 
-        # Compute the weights, using the matrix inversion lemma
-        G = cov_update_inv.dot(X.T)
-        K = X.dot(G)
-        K.flat[::n_samples + 1] += 1
-        K_inv = np.linalg.pinv(K)
-        AP = cov_update_inv.dot(pattern)
-        coef = (AP - multi_dot((G, K_inv, X, AP))).T
+            # Compute the weights, using the matrix inversion lemma
+            G = cov_update_inv.dot(X.T)
+            K = X.dot(G)
+            K.flat[::n_samples + 1] += 1
+            K_inv = np.linalg.pinv(K)
+            AP = cov_update_inv.dot(pattern)
+            coef = (AP - multi_dot((G, K_inv, X, AP))).T
         return coef, None
 
     else:
@@ -575,7 +577,7 @@ def get_args(updater):
     args : list of str
         The arguments that can be optimized.
     """
-    if isinstance(updater, CovUpdater):
+    if is_updater(updater):
         args = inspect.getargspec(updater.update).args
         args = [arg for arg in args if arg != 'self']
     else:
@@ -869,49 +871,19 @@ def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
 
     if cov_updater_params in cache:
         # Cache hit
-        cov_update_inv, G, K = cache[cov_updater_params]
+        cov_updater = cache[cov_updater_params]
     else:
         # Cache miss, compute values and store in cache
-        if is_updater(cov_updater):
-            # User supplied a CovUpdater object for detailed control
-            cov_update = cov_updater.update(*cov_updater_params)
-            cov_update_inv = cov_update.inv()
-        else:
-            # User supplied an updater function
-            cov_update = cov_updater(X, y)
-            cov_update_inv = np.linalg.pinv(cov_update)
-
-        G = cov_update_inv.dot(X.T)
-        K = X.dot(G)
-        K.flat[::n_samples + 1] += 1
-        cache[cov_updater_params] = (cov_update_inv, G, K)
+        cov_update = cov_updater.update(*cov_updater_params).fit(X, y)
+        cache[cov_updater_params] = cov_update
 
     # Do efficient leave-one-out crossvalidation
     y_hat = np.zeros_like(y, dtype=float)
-    G1 = None
-    X1 = None
-    y1 = None
-    for K_i, test in zip(loo_utils.loo_kern_inv(K), range(n_samples)):
-        if G1 is None or X1 is None:
-            G1 = G[:, 1:].copy()
-            X1 = X[1:].copy()
-            y1 = y[1:].copy()
-        else:
-            if test >= 2:
-                G1[:, test - 2] = G[:, test - 1]
-                X1[test - 2] = X[test - 1]
-                y1[test - 2] = y[test - 1]
-            G1[:, test - 1] = G[:, 0]
-            X1[test - 1] = X[0]
-            y1[test - 1] = y[0]
-
-        P = Ps[test]
+    Xs = loo_utils.loo(X)
+    ys = loo_utils.loo(y)
+    for coef, X1, y1, P, test in zip(cov_update.loo_inv_dot(Xs, Ps), Xs, ys, Ps, range(n_samples)):
         if pattern_modifier is not None:
             P = pattern_modifier(P, X, y, *pattern_modifier_params)
-        GammaP = cov_update_inv.dot(P)
-
-        coef = (GammaP - G1.dot(K_i.dot(X1.dot(GammaP)))).T
-
         N = Ns[test]
         if normalizer_modifier is not None:
             N = normalizer_modifier(N, X, y, P, coef,
@@ -921,6 +893,6 @@ def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
         if coef.ndim == 1:
             coef = coef[np.newaxis, :]
 
-        y_hat[test] = multi_dot((X[[test]], coef.T, N))
+        y_hat[test] = multi_dot((X[[test]], coef, N))
 
     return y_hat
