@@ -881,7 +881,7 @@ def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
     y_hat = np.zeros_like(y, dtype=float)
     Xs = loo_utils.loo(X)
     ys = loo_utils.loo(y)
-    for coef, X1, y1, P, test in zip(cov_update.loo_inv_dot(Xs, Ps), Xs, ys, Ps, range(n_samples)):
+    for coef, X1, y1, P, test in zip(cov_update.loo_inv_dot(X, Ps), Xs, ys, Ps, range(n_samples)):
         if pattern_modifier is not None:
             P = pattern_modifier(P, X, y, *pattern_modifier_params)
         N = Ns[test]
@@ -896,3 +896,44 @@ def do_loo_kernel(X, y, Ps, Ns, cov_updater, cov_updater_params,
         y_hat[test] = multi_dot((X[[test]], coef, N))
 
     return y_hat
+
+"""
+    # Do efficient leave-one-out crossvalidation
+    y_hat = np.zeros_like(y, dtype=float)
+    G1 = None
+    X1 = None
+    y1 = None
+    for K_i, test in zip(loo_utils.loo_kern_inv(K), range(n_samples)):
+        if G1 is None or X1 is None:
+            G1 = G[:, 1:].copy()
+            X1 = X[1:].copy()
+            y1 = y[1:].copy()
+        else:
+            if test >= 2:
+                G1[:, test - 2] = G[:, test - 1]
+                X1[test - 2] = X[test - 1]
+                y1[test - 2] = y[test - 1]
+            G1[:, test - 1] = G[:, 0]
+            X1[test - 1] = X[0]
+            y1[test - 1] = y[0]
+
+        P = Ps[test]
+        if pattern_modifier is not None:
+            P = pattern_modifier(P, X, y, *pattern_modifier_params)
+        GammaP = cov_update_inv.dot(P)
+
+        coef = (GammaP - G1.dot(K_i.dot(X1.dot(GammaP)))).T
+
+        N = Ns[test]
+        if normalizer_modifier is not None:
+            N = normalizer_modifier(N, X, y, P, coef,
+                                    *normalizer_modifier_params)
+        N = np.atleast_2d(N)
+
+        if coef.ndim == 1:
+            coef = coef[np.newaxis, :]
+
+        y_hat[test] = multi_dot((X[[test]], coef.T, N))
+
+    return y_hat
+"""
