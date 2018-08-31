@@ -1,13 +1,13 @@
-import numpy as np
+from numpy.linalg import pinv, norm
 
-def unit_gain_normalizer(normalizer, X, y, pattern, coef):
+def unit_gain(normalizer, X, y, pattern, coef):
     """Ensures that pattern @ coef.T == 1"""
-    return 1 / coef.dot(pattern)
+    return pinv(coef.dot(pattern))
 
-def unit_weight_norm_normalizer(normalizer, X, y, pattern, coef):
+def unit_weight_norm(normalizer, X, y, pattern, coef):
     """Ensures that |coef| == 1"""
-    return coef / np.linalg.norm(coef, axis=1, keepdims=True)
+    return coef / norm(coef, axis=1, keepdims=True)
 
-def y_normalizer(normalizer, X, y, pattern, coef):
-    """Normalizes with cov(y)^-1"""
-    return np.linalg.pinv(y.T.dot(y))
+def true_labels(normalizer, X, y, pattern, coef):
+    """Normalizes with the true labels: cov(y)^-1"""
+    return pinv(y.T.dot(y))

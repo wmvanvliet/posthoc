@@ -42,6 +42,7 @@ def test_pattern_computation():
 
 
 def test_inverse_predict():
+    """Test inverting a linear model."""
     X, y, _ = gen_data()
     w = Workbench(LinearRegression()).fit(X, y)
     y_hat = w.predict(X)

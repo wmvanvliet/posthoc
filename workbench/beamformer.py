@@ -3,34 +3,18 @@ import numpy as np
 from sklearn.base import TransformerMixin, RegressorMixin
 from sklearn.linear_model.base import LinearModel
 
-from .workbench import _compute_weights
 
-
-class LCMV(LinearModel, TransformerMixin, RegressorMixin):
-    '''An LCMV beamformer filter.
+class Beamformer(LinearModel, TransformerMixin, RegressorMixin):
+    '''A beamformer filter.
 
     A beamformer filter attempts to isolate a specific signal in the data. The
-    signal of interest is specified as an activation template. The linearly
-    constrained minimum variance (LCMV) beamformer attemps to minimize the
-    overall variance of the output while not reducing the variance of the
-    signal of interest.
+    signal of interest is specified as an activation pattern.
 
-    By default, a 'unit-gain' LCMV beamformer is used, that passes a signal
-    conforming to the given template with unit gain (self.coef_ @ template ==
-    I). Other types of beamformers can be constructed by using the
+    By default, a linear constrained minimum variance (LCMV) beamformer is
+    used. This beamformer passes a signal conforming to the given template with
+    unit gain (self.coef_ @ template == I), while minimizing overall output.
+    Other types of beamformers can be constructed by using the
     `normalizer_modifier` parameter.
-
-    Shrinkage of the covariance matrix can improve the stability of the filter
-    when only few data are available. This shrinkage can be performed by
-    using either a `cov_modifier` or `cov_updater` parameter.
-
-    There are two methods of computing the weights. The 'traditional' method
-    computes the (n_features x n_features) covariance matrix of X, while the
-    'kernel' method instead computes the (n_items x n_items) "item covariance".
-    One method can be much more efficient than the other, depending on the
-    number of features and items in the data. For the 'kernel' method to work
-    in combination with shrinkage, the `cov_updater` parameter must be used
-    instead of the `cov_modifier` parameter.
 
     Parameters
     ----------
@@ -43,34 +27,20 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
     normalize : bool (default: True)
         Whether to normalize (std. dev = 1) the data before fitting the
         beamformer. Can make the filter more robust.
-    cov_modifier : function | None
-        Function that takes a covariance matrix (an ndarray of shape
-        (n_features, n_features)) and modifies it. Must have the signature:
-        `def cov_modifier(cov, X, y)`
-        and return the modified covariance matrix. Defaults to `None`, which
-        means no modification of the covariance matrix is performed.
-        Alternatively, an updater function for the covariance may be specified.
-        See the `cov_updater` parameter.
-    cov_updater : function | CovUpdater | None
-        Function that returns a matrix (an ndarray of shape
-        (n_features, n_features)) that will be added to the covariance matrix.
-        Must have the signature:
-        `def cov_updater(X, y)`
-        and return the matrix to be added. Defaults to `None`, which means no
-        modification of the covariance matrix is performed. Using this
-        parameter instead of `cov_modifier` allows the usage of
-        `method='kernel'`.
+    cov : instance of CovEstimator | function | None
+        The method used to estimate the covariance. Can either be one of the
+        predefined CovEstimator objects, or a function that takes the empirical
+        covariance matrix (an ndarray of shape (n_features, n_features)) as
+        input and modifies it. If such a function is used, it must have the
+        signature: `def cov_modifier(cov, X, y)` and return the modified
+        covariance matrix. Defaults to `None`, which means the default
+        empirical estimator of the covariance matrix is used.
     normalizer_modifier : function | None
         Function that takes a normalizer (an ndarray of shape (n_targets,
         n_targets)) and modifies it. Must have the signature:
-        `def normalizer_modifier(coef, X, y, template, coef)`
+        `def normalizer_modifier(normalizer, X, y, template, coef)`
         and return the modified normalizer. Defaults to `None`, which means no
         modification of the normalizer.
-    method : 'traditional' | 'kernel' | 'auto'
-        Whether to use the traditional formulation of the linear model, which
-        computes the covariance matrix, or whether to use the kernel trick to
-        avoid computing the covariance matrix. Defaults to `'auto'`, which
-        attempts to find the best approach automatically.
 
     Attributes
     ----------
@@ -78,7 +48,7 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
         The filter weights.
     '''
     def __init__(self, template, center=True, normalize=False,
-                 cov_modifier=None, cov_updater=None, normalizer_modifier=None,
+                 cov=None, normalizer_modifier=None,
                  method='auto'):
         template = np.asarray(template)
         if template.ndim == 1:
@@ -88,8 +58,7 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
         self.center = center
         self.fit_intercept = self.center
         self.normalize = normalize
-        self.cov_modifier = cov_modifier
-        self.cov_updater = cov_updater
+        self.cov = cov
         self.normalizer_modifier = normalizer_modifier
         self.method = method
 
@@ -113,18 +82,18 @@ class LCMV(LinearModel, TransformerMixin, RegressorMixin):
         )
 
         # Compute weights
-        coef, _ = _compute_weights(X, None, self.template.T, self.cov_modifier,
-                                   self.cov_updater, None,
-                                   self.method)
+        coef = self.cov.fit(X, y).inv_dot(X, self.template).T
 
-        # The default normalizer constructs a unit-gain LCMV beamformer
+        # The default normalizer constructs an LCMV beamformer
         normalizer = [c.dot(p) for c, p in zip(coef, self.template)]
         normalizer = np.diag(normalizer)
 
-        # Modify and apply the normalizer
+        # Modify the normalizer with the user specified function
         if self.normalizer_modifier is not None:
             normalizer = self.normalizer_modifier(normalizer, X, None,
                                                   self.template.T, coef)
+
+        # Apply the normalizer
         self.coef_ = normalizer.dot(coef)
 
         # Undo scaling if self.normalize == True
