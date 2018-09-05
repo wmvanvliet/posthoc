@@ -82,11 +82,12 @@ class Beamformer(LinearModel, TransformerMixin, RegressorMixin):
         )
 
         # Compute weights
-        coef = self.cov.fit(X, y).inv_dot(X, self.template).T
+        coef = self.cov.fit(X, y).inv_dot(X, self.template.T).T
 
         # The default normalizer constructs an LCMV beamformer
-        normalizer = [c.dot(p) for c, p in zip(coef, self.template)]
-        normalizer = np.diag(normalizer)
+        # normalizer = np.array([c.dot(p) for c, p in zip(coef, self.template)])
+        # normalizer = np.diag(1 / normalizer)
+        normalizer = np.linalg.pinv(coef.dot(self.template.T))
 
         # Modify the normalizer with the user specified function
         if self.normalizer_modifier is not None:
