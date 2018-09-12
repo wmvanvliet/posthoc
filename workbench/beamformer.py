@@ -3,6 +3,8 @@ import numpy as np
 from sklearn.base import TransformerMixin, RegressorMixin
 from sklearn.linear_model.base import LinearModel
 
+from .cov_estimators import Empirical
+
 
 class Beamformer(LinearModel, TransformerMixin, RegressorMixin):
     '''A beamformer filter.
@@ -58,7 +60,10 @@ class Beamformer(LinearModel, TransformerMixin, RegressorMixin):
         self.center = center
         self.fit_intercept = self.center
         self.normalize = normalize
-        self.cov = cov
+        if cov is None:
+            self.cov = Empirical()
+        else:
+            self.cov = cov
         self.normalizer_modifier = normalizer_modifier
         self.method = method
 
@@ -85,8 +90,6 @@ class Beamformer(LinearModel, TransformerMixin, RegressorMixin):
         coef = self.cov.fit(X, y).inv_dot(X, self.template.T).T
 
         # The default normalizer constructs an LCMV beamformer
-        # normalizer = np.array([c.dot(p) for c, p in zip(coef, self.template)])
-        # normalizer = np.diag(1 / normalizer)
         normalizer = np.linalg.pinv(coef.dot(self.template.T))
 
         # Modify the normalizer with the user specified function

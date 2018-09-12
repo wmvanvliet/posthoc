@@ -10,7 +10,7 @@ class CovEstimator(object):
         return self
 
     def update(self, X):
-        return self
+        return self.copy()
 
     def inv_dot(self):
         raise NotImplemented('This function must be implemented in a subclass')
@@ -33,9 +33,6 @@ class Empirical(CovEstimator):
         self.cov_inv = pinv(X.T @ X)
         return self
 
-    def update(self, X):
-        return self.copy()
-
     def inv_dot(self, X, P):
         """Computes inv(cov(X)) @ P"""
         return self.cov_inv @ P
@@ -47,6 +44,76 @@ class Empirical(CovEstimator):
             tmp = self.cov_inv @ x[:, np.newaxis]
             cov_inv = self.cov_inv + (tmp @ tmp.T) / (1 + x @ tmp)
             yield cov_inv @ P
+
+
+class L2(Empirical):
+    def __init__(self, alpha=1, scale_by_var=True):
+        super().__init__()
+        self.alpha = alpha
+        self.scale_by_var = scale_by_var
+
+    def fit(self, X, y=None):
+        cov = X.T @ X
+        if self.scale_by_var:
+            self.mean_var = np.trace(cov) / len(cov)
+        # Add to the diagonal in-place
+        cov_reg = cov.copy()
+        cov_reg.flat[::len(cov_reg) + 1] += self.alpha * self.mean_var
+        self.cov = cov
+        self.cov_reg = cov_reg
+        self.cov_inv = pinv(cov_reg)
+        return self
+
+    def update(self, X, alpha):
+        l2 = L2(alpha, self.scale_by_var)
+        l2.cov = self.cov
+        l2.mean_var = self.mean_var
+        l2.cov_reg = self.cov.copy()
+        l2.cov_reg.flat[::len(l2.cov_reg) + 1] += alpha * l2.mean_var
+        l2.cov_inv = pinv(l2.cov_reg)
+        return l2
+
+    def get_x0(self):
+        return [self.alpha]
+
+    def get_bounds(self):
+        return [(0, None)]
+
+
+class Shrinkage(Empirical):
+    def __init__(self, alpha=0.5):
+        if not (0 <= alpha <= 1):
+            raise ValueError('alpha must be between 0 and 1')
+        super().__init__()
+        self.alpha = alpha
+
+    def fit(self, X, y=None):
+        cov = X.T @ X
+        self.mean_var = np.trace(cov) / len(cov)
+        # Add to the diagonal in-place
+        cov_reg = (1 - self.alpha) * cov.copy()
+        cov_reg.flat[::len(cov_reg) + 1] += self.alpha * self.mean_var
+        self.cov = cov
+        self.cov_reg = cov_reg
+        self.cov_inv = pinv(cov_reg)
+        return self
+
+    def update(self, X, alpha):
+        if not (0 <= alpha <= 1):
+            raise ValueError('alpha must be between 0 and 1')
+        s = Shrinkage(alpha)
+        s.cov = self.cov
+        s.mean_var = self.mean_var
+        s.cov_reg = (1 - alpha) * s.cov_reg.copy()
+        s.cov_reg.flat[::len(s.cov_reg) + 1] += alpha * s.mean_var
+        s.cov_inv = pinv(s.cov_reg)
+        return s
+
+    def get_x0(self):
+        return [self.alpha]
+
+    def get_bounds(self):
+        return [(0, None)]
 
 
 class _InversionLemma(CovEstimator):
@@ -205,7 +272,7 @@ class KroneckerKernel(_InversionLemma):
         A_inv = pinv(A)
         # B = (1 - self.alpha) * (1 - self.beta) * X.T
         G = self._kronecker_dot(A_inv, X.T)
-        K = (X @ G) * (1 - self.alpha) * (1 - self.beta) 
+        K = (X @ G) * (1 - self.alpha) * (1 - self.beta)
         K.flat[::len(K) + 1] += 1
 
         self.A_inv = A_inv
