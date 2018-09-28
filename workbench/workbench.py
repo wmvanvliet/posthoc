@@ -190,7 +190,7 @@ def get_args(inst):
     """
     if is_estimator(inst):
         args = inspect.getargspec(inst.update).args
-        args = [arg for arg in args if arg != 'self']
+        args = [arg for arg in args if arg != 'self' and arg != 'X']
     else:
         args = inspect.getargspec(inst).args
         ignore_args = {'self', 'X', 'y', 'pattern', 'normalizer', 'coef'}
