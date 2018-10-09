@@ -60,7 +60,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'workbench'
-copyright = u'2017, Aalto University'
+copyright = u'2018, Aalto University'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -314,7 +314,7 @@ sphinx_gallery_conf = {
     'examples_dirs': '../examples',
     'gallery_dirs': 'auto_examples',
     'backreferences_dir': 'generated',
-    'find_mayavi_figures': True,
+    'image_scrapers': ['matplotlib', 'mayavi'],
     'reference_url': {
         'mne': 'http://mne-tools.github.io/stable/',
         'numpy': 'http://docs.scipy.org/doc/numpy-1.9.1',

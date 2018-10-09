@@ -23,7 +23,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
     '''
     Work bench for post-hoc alteration of a linear model.
 
-    Decomposes the `.coef_` of a linear model into a covariance matrix, a
+    Decomposes the ``.coef_`` of a linear model into a covariance matrix, a
     pattern and a normalizer. These components are then altered by user
     speficied functions and the linear model is re-assembled.
 
@@ -36,21 +36,21 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         predefined CovEstimator objects, or a function that takes the empirical
         covariance matrix (an ndarray of shape (n_features, n_features)) as
         input and modifies it. If such a function is used, it must have the
-        signature: `def cov_modifier(cov, X, y)` and return the modified
+        signature: ``def cov_modifier(cov, X, y)`` and return the modified
         covariance matrix. Defaults to `None`, which means the default
         empirical estimator of the covariance matrix is used.
     pattern_modifier : function | None
         Function that takes a pattern (an ndarray of shape (n_features,
         n_targets)) and modifies it. Must have the signature:
-        `def pattern_modifier(pattern, X, y)`
-        and return the modified pattern. Defaults to `None`, which means no
+        ``def pattern_modifier(pattern, X, y)``
+        and return the modified pattern. Defaults to ``None``, which means no
         modification of the pattern.
     normalizer_modifier : function | None
         Function that takes a normalizer (an ndarray of shape (n_targets,
         n_targets)) and modifies it. Must have the signature:
-        `def normalizer_modifier(coef, X, y, pattern, coef)`
-        and return the modified normalizer. Defaults to `None`, which means no
-        modification of the normalizer.
+        ``def normalizer_modifier(coef, X, y, pattern, coef)``
+        and return the modified normalizer. Defaults to ``None``, which means
+        no modification of the normalizer.
 
     Attributes
     ----------
@@ -289,7 +289,7 @@ class WorkbenchOptimizer(Workbench):
         if flat_y:
             y = np.atleast_2d(y).T
 
-        # Initialize the CovUpdater object
+        # Initialize the CovEstimator object
         self.cov.fit(X, y)
 
         # Collect parameters to optimize

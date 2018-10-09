@@ -6,11 +6,11 @@ from nose.tools import assert_true, assert_greater
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 import numpy as np
 
-from workbench import Workbench, WorkbenchOptimizer, ShrinkageUpdater
+from workbench import Workbench, WorkbenchOptimizer, cov_estimators
 from workbench.utils import gen_data
 
 
-def _compare_models(wb, base, X, atol=0, rtol=1E-7):
+def _compare_models(wb, base, X, atol=0, rtol=1E-5):
     """Compare a Workbench model with a base model."""
     assert_allclose(wb.coef_, base.coef_, atol, rtol)
     assert_allclose(wb.intercept_, base.intercept_, atol, rtol)
@@ -61,13 +61,6 @@ def test_identity_transform():
     ols = LinearRegression().fit(X[train], y[train])
 
     # Specify identity modifications.
-    def cov_modifier(cov, X, y):
-        return cov
-
-    def cov_updater(X, y):
-        n = X.shape[1]  # Number of features
-        return np.zeros((n, n))
-
     def pattern_modifier(pattern, X, y):
         return pattern
 
@@ -75,20 +68,9 @@ def test_identity_transform():
         return normalizer
 
     # Using a modifier function
-    wb = Workbench(ols, cov_modifier=cov_modifier,
+    wb = Workbench(ols, cov=cov_estimators.Empirical(),
                    pattern_modifier=pattern_modifier,
-                   normalizer_modifier=normalizer_modifier,
-                   method='traditional')
-    wb.fit(X[train], y[train])
-    _compare_models(wb, ols, X[test])
-
-    # Using an updater function. We have to use the "traditional" solver.
-    # The "kernel" solver cannot be used, as an update rule of all zero's does
-    # not have an inverse.
-    wb = Workbench(LinearRegression(), cov_updater=cov_updater,
-                   pattern_modifier=pattern_modifier,
-                   normalizer_modifier=normalizer_modifier,
-                   method='traditional')
+                   normalizer_modifier=normalizer_modifier)
     wb.fit(X[train], y[train])
     _compare_models(wb, ols, X[test])
 
@@ -109,36 +91,14 @@ def test_ridge_regression():
     ols = LinearRegression(normalize=False).fit(X[train], y[train])
 
     # Perform the post-hoc adaptation using different code paths
-    def cov_modifier(cov, X, y):
-        n = X.shape[1]  # Number of features
-        return cov + alpha * np.eye(n)
-
-    def cov_updater(X, y):
-        n = X.shape[1]  # Number of features
-        return alpha * np.eye(n)
-
-    wb = Workbench(ols, cov_modifier=cov_modifier, method='traditional')
-    wb.fit(X[train], y[train])
-    _compare_models(wb, ridge, X[test])
-
-    wb = Workbench(ols, cov_updater=cov_updater, method='traditional')
+    wb = Workbench(ols, cov=cov_estimators.L2(alpha, scale_by_var=False))
     wb.fit(X[train], y[train])
     _compare_models(wb, ridge, X[test])
 
     # Try the "kernel" method
-    wb = Workbench(ols, cov_updater=cov_updater, method='kernel')
-    wb.fit(X[train], y[train])
-    _compare_models(wb, ridge, X[test], rtol=1E-5)
-
-    # Test using a CovUpdater object
-    cov_updater = ShrinkageUpdater(alpha, scale_by_trace=False)
-    wb = Workbench(ols, cov_updater=cov_updater, method='traditional')
+    wb = Workbench(ols, cov=cov_estimators.L2Kernel(alpha, scale_by_var=False))
     wb.fit(X[train], y[train])
     _compare_models(wb, ridge, X[test])
-
-    wb = Workbench(ols, cov_updater=cov_updater, method='kernel')
-    wb.fit(X[train], y[train])
-    _compare_models(wb, ridge, X[test], rtol=1E-5)
 
 
 def test_post_hoc_modification():
@@ -154,7 +114,7 @@ def test_post_hoc_modification():
 
     # Use post-hoc adaptation to swap out the cov matrix estimated on the
     # training data only, with one that was estimated on all data.
-    def cov_modifier(cov, X_train, y_train):
+    def cov_function(X_train, y_train):
         X_ = X - X.mean(axis=0)
         return X_.T.dot(X_) / len(X_)
 
@@ -170,7 +130,7 @@ def test_post_hoc_modification():
         return y_.T.dot(y_) / len(y_)  # The ground truth normalizer
 
     wb = Workbench(LinearRegression(),
-                   cov_modifier=cov_modifier,
+                   cov=cov_estimators.Function(cov_function),
                    pattern_modifier=pattern_modifier,
                    normalizer_modifier=normalizer_modifier)
     wb.fit(X[train], y[train])
@@ -185,29 +145,28 @@ def test_workbench_optimizer():
     """Test using an optimizer to fine-tune parameters."""
     X, y, A = gen_data(noise_scale=50, N=100)
 
-    for method in ['auto', 'traditional', 'kernel']:
-        wbo = WorkbenchOptimizer(LinearRegression(normalize=True),
-                                 cov_updater=ShrinkageUpdater(), scoring='r2',
-                                 method=method, cov_param_x0=[0.2],
-                                 cov_param_bounds=[(0.1, None)],
-                                 optimizer_options={'maxiter': 100})
-        wbo.fit(X, y)
+    wbo = WorkbenchOptimizer(LinearRegression(normalize=True),
+                             cov=cov_estimators.L2(scale_by_var=False),
+                             scoring='r2',
+                             cov_param_x0=[0.2],
+                             cov_param_bounds=[(0.1, None)],
+                             optimizer_options={'maxiter': 100})
+    wbo.fit(X, y)
 
-        # Weights of the WorkbenchOptimizer should equal the weights of a
-        # Workbench initialized with the optimal parameters.
-        wb = Workbench(LinearRegression(normalize=True),
-                       cov_updater=ShrinkageUpdater(*wbo.cov_updater_params_),
-                       method=method)
-        wb.fit(X, y)
-        assert_allclose(wbo.coef_, wb.coef_)
-        assert_allclose(wbo.intercept_, wb.intercept_)
+    # Weights of the WorkbenchOptimizer should equal the weights of a
+    # Workbench initialized with the optimal parameters.
+    wb = Workbench(LinearRegression(normalize=True),
+                   cov=cov_estimators.L2(*wbo.cov_params_, scale_by_var=False))
+    wb.fit(X, y)
+    assert_allclose(wbo.coef_, wb.coef_)
+    assert_allclose(wbo.intercept_, wb.intercept_)
 
-        # Weights of the WorkbenchOptimizer should equal the weights of a
-        # Ridge initialized with the optimal parameters.
-        rr = Ridge(alpha=wbo.cov_updater_params_[0], normalize=True)
-        rr.fit(X, y)
-        assert_allclose(wbo.coef_, rr.coef_)
-        assert_allclose(wbo.intercept_, rr.intercept_)
+    # Weights of the WorkbenchOptimizer should equal the weights of a
+    # Ridge initialized with the optimal parameters.
+    rr = Ridge(alpha=wbo.cov_params_[0], normalize=True)
+    rr.fit(X, y)
+    assert_allclose(wbo.coef_, rr.coef_)
+    assert_allclose(wbo.intercept_, rr.intercept_)
 
 
 def test_workbench_optimizer2():
@@ -224,19 +183,19 @@ def test_workbench_optimizer2():
     X_ = X - X.mean(axis=0)
     cov_X = X_.T.dot(X_) / len(X_)
 
-    def cov_updater(X, y, alpha=0.5):
+    def cov_func(X, y, alpha=0.5):
         cov = X.T.dot(X)
         return (1 - alpha) * cov + alpha * cov_X * len(X)
 
     def pattern_modifier(pattern, X, y, beta=0.5):
         return (1 - beta) * pattern + beta * A
 
-    wb = WorkbenchOptimizer(LinearRegression(), cov_updater=cov_updater,
+    wb = WorkbenchOptimizer(LinearRegression(), cov=cov_estimators.Function(cov_func),
                             pattern_modifier=pattern_modifier,
                             cov_param_x0=[0.5], cov_param_bounds=[(0, 1)],
                             pattern_param_x0=[0.5],
                             pattern_param_bounds=[(0, 1)],
-                            method='traditional', scoring='r2')
+                            scoring='r2')
     wb.fit(X[train], y[train])
     wb_score = wb.score(X[test], y[test])
 
