@@ -17,18 +17,20 @@ from .loo_utils import loo, loo_kern_inv
 
 class CovEstimator(object):
     """Abstract base class for covariance estimation methods."""
-    def fit(self, X, y=None):
+    def fit(self, X):
         return self
 
     def update(self, X):
         return self.copy()
 
     def inv_dot(self, P):
+        """Computes inv(cov(X)) @ P"""
         raise NotImplemented('This function must be implemented in a subclass')
 
     def loo_inv_dot(self, X, Ps):
+        """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
         for X_, P in zip(loo(X), Ps):
-            yield self.inv_dot(X_, P)
+            yield self.fit(X_).inv_dot(X_, P)
 
     def get_x0(self):
         return []
@@ -45,7 +47,7 @@ class Function(CovEstimator):
     def __init__(self, func):
         self.func = func
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         return self
 
     def inv_dot(self, X, P):
@@ -57,7 +59,7 @@ class Function(CovEstimator):
 
 class Empirical(CovEstimator):
     """Empirical estimation of the covariance matrix."""
-    def fit(self, X, y=None):
+    def fit(self, X):
         self.cov = X.T @ X
         self.cov_inv = pinv(X.T @ X)
         return self
@@ -78,7 +80,7 @@ class Empirical(CovEstimator):
         return 'Empirical()'
 
 
-class L2(Empirical):
+class L2(CovEstimator):
     """
     Estimation of the covariance matrix using L2 regularization.
 
@@ -99,7 +101,7 @@ class L2(Empirical):
         self.alpha = alpha
         self.scale_by_var = scale_by_var
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         cov = X.T @ X
         # Add to the diagonal in-place
         cov_reg = cov.copy()
@@ -125,6 +127,10 @@ class L2(Empirical):
         l2.cov_inv = pinv(l2.cov_reg)
         return l2
 
+    def inv_dot(self, X, P):
+        """Computes inv(cov(X)) @ P"""
+        return self.cov_inv @ P
+
     def get_x0(self):
         return [self.alpha]
 
@@ -136,7 +142,7 @@ class L2(Empirical):
                                                       self.scale_by_var)
 
 
-class Shrinkage(Empirical):
+class Shrinkage(CovEstimator):
     """
     Estimation of the covariance matrix using Shrinkage regularization.
 
@@ -155,7 +161,7 @@ class Shrinkage(Empirical):
         super().__init__()
         self.alpha = alpha
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         cov = X.T @ X
         self.mean_var = np.trace(cov) / len(cov)
         # Add to the diagonal in-place
@@ -177,6 +183,10 @@ class Shrinkage(Empirical):
         s.cov_inv = pinv(s.cov_reg)
         return s
 
+    def inv_dot(self, X, P):
+        """Computes inv(cov(X)) @ P"""
+        return self.cov_inv @ P
+
     def get_x0(self):
         return [self.alpha]
 
@@ -187,7 +197,7 @@ class Shrinkage(Empirical):
         return 'Shrinkage(alpha={})'.format(self.alpha)
 
 
-class Kronecker(Empirical):
+class Kronecker(CovEstimator):
     """
     Estimation of the covariance matrix using Kronecker shrinkage.
 
@@ -252,7 +262,7 @@ class Kronecker(Empirical):
                 )
             )
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         n_samples, n_features = X.shape
 
         if self.inner_size is None:
@@ -299,6 +309,10 @@ class Kronecker(Empirical):
         result = A.dot(B.reshape(self.outer_size, -1))
         return result.reshape(B.shape)
 
+    def inv_dot(self, X, P):
+        """Computes inv(cov(X)) @ P"""
+        return self.cov_inv @ P
+
     def get_x0(self):
         return [self.alpha, self.beta]
 
@@ -330,7 +344,7 @@ class _InversionLemma(CovEstimator):
     def compute_AB_parts(self, X):
         raise NotImplemented('This function must be implemented in a subclass')
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         A_inv, B = self.compute_AB_parts(X)
         G = A_inv * B
         K = X @ G
@@ -496,7 +510,7 @@ class KroneckerKernel(_InversionLemma):
                 )
             )
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         n_samples, n_features = X.shape
 
         if self.inner_size is None:

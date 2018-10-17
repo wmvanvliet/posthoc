@@ -230,9 +230,9 @@ class TestShrinkage():
         X, _, P = gen_data(zero_mean=True, N=10)
         m = X.shape[1]
         alpha = 0.5
-        target = (np.trace(X.T.dot(X)) / m) * np.eye(m)
         shrink = cov_estimators.Shrinkage().fit(X)
         for X_, XP in zip(loo(X), shrink.loo_inv_dot(X, [P] * 10)):
+            target = (np.trace(X_.T.dot(X_)) / m) * np.eye(m)
             assert_allclose(
                 XP, pinv((1 - alpha) * X_.T.dot(X_) + alpha * target).dot(P))
 
@@ -489,3 +489,17 @@ class TestKroneckerKernel():
         kron = cov_estimators.KroneckerKernel(5, 2).fit(X)
         assert_allclose(kron._kronecker_dot(outer_mat, X.T),
                         np.kron(outer_mat, np.eye(2)).dot(X.T))
+
+    def test_fallback(self):
+        """Test whether KroneckerKernel can fall back to ShrinkageKernel"""
+        from sklearn import datasets
+        X, _ = datasets.make_regression(n_samples=100, n_features=1000,
+                                        n_targets=1)
+        m = X.shape[1]
+        P = np.random.randn(m, 1)
+        alpha = 0.5
+        target = (np.trace(X.T.dot(X)) / m) * np.eye(m)
+
+        shrink = cov_estimators.KroneckerKernel(20, 50, alpha, 0).fit(X)
+        assert_allclose(shrink.inv_dot(X, P),
+                        pinv((1 - alpha) * X.T.dot(X) + alpha * target).dot(P))

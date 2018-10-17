@@ -110,8 +110,6 @@ def disassemble_modify_reassemble(coef, X, y, cov=None,
     Scikit-Learn model.
     '''
     # Deal with defaults
-    if cov_params is None:
-        cov_params = []
     if pattern_modifier_params is None:
         pattern_modifier_params = []
     if normalizer_modifier_params is None:
@@ -132,7 +130,10 @@ def disassemble_modify_reassemble(coef, X, y, cov=None,
         pattern = pattern[:, np.newaxis]
 
     # Compute new weights
-    new_coef = cov.fit(X, y).inv_dot(X, pattern).T
+    cov.fit(X)
+    if cov_params is not None:
+        cov = cov.update(X, *cov_params)
+    new_coef = cov.inv_dot(X, pattern).T
 
     # Modify and apply the normalizer
     if normalizer_modifier is not None:

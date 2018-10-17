@@ -117,6 +117,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         # The `coef_` attribute of Scikit-Learn linear models are re-scaled
         # after normalization. Undo this re-scaling.
         W = self.model.coef_ * X_scale
+
         # Modify the original linear model and obtain a new one
         coef, pattern, normalizer = disassemble_modify_reassemble(
             W, X, y, self.cov, self.pattern_modifier, self.normalizer_modifier
@@ -290,7 +291,7 @@ class WorkbenchOptimizer(Workbench):
             y = np.atleast_2d(y).T
 
         # Initialize the CovEstimator object
-        self.cov.fit(X, y)
+        self.cov.fit(X)
 
         # Collect parameters to optimize
         n_cov_params = len(get_args(self.cov))
@@ -385,6 +386,8 @@ class WorkbenchOptimizer(Workbench):
 
         # Set intercept and undo normalization
         self._set_intercept(X_offset, y_offset, X_scale)
+
+        self.inverse_intercept_ = X_offset - np.dot(y_offset, self.pattern_.T)
 
         return self
 

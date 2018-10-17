@@ -114,9 +114,9 @@ def test_post_hoc_modification():
 
     # Use post-hoc adaptation to swap out the cov matrix estimated on the
     # training data only, with one that was estimated on all data.
-    def cov_function(X_train, y_train):
+    def cov_function(X_train):
         X_ = X - X.mean(axis=0)
-        return X_.T.dot(X_) / len(X_)
+        return X_.T.dot(X_)
 
     # Use post-hoc adaptation to swap out the estimated pattern with the actual
     # pattern.
@@ -127,7 +127,7 @@ def test_post_hoc_modification():
     # training data only, with one that was estimated on all data.
     def normalizer_modifier(normalizer, X_train, y_train, cov_X, coef):
         y_ = y - y.mean(axis=0)
-        return y_.T.dot(y_) / len(y_)  # The ground truth normalizer
+        return y_.T.dot(y_)  # The ground truth normalizer
 
     wb = Workbench(LinearRegression(),
                    cov=cov_estimators.Function(cov_function),
@@ -143,7 +143,7 @@ def test_post_hoc_modification():
 
 def test_workbench_optimizer():
     """Test using an optimizer to fine-tune parameters."""
-    X, y, A = gen_data(noise_scale=50, N=100)
+    X, y, A = gen_data(noise_scale=50, N=10)
 
     wbo = WorkbenchOptimizer(LinearRegression(normalize=True),
                              cov=cov_estimators.L2(scale_by_var=False),
@@ -180,17 +180,10 @@ def test_workbench_optimizer2():
     ols = LinearRegression().fit(X[train], y[train])
     ols_score = ols.score(X[test], y[test])
 
-    X_ = X - X.mean(axis=0)
-    cov_X = X_.T.dot(X_) / len(X_)
-
-    def cov_func(X, y, alpha=0.5):
-        cov = X.T.dot(X)
-        return (1 - alpha) * cov + alpha * cov_X * len(X)
-
     def pattern_modifier(pattern, X, y, beta=0.5):
         return (1 - beta) * pattern + beta * A
 
-    wb = WorkbenchOptimizer(LinearRegression(), cov=cov_estimators.Function(cov_func),
+    wb = WorkbenchOptimizer(LinearRegression(), cov=cov_estimators.L2(),
                             pattern_modifier=pattern_modifier,
                             cov_param_x0=[0.5], cov_param_bounds=[(0, 1)],
                             pattern_param_x0=[0.5],
