@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def gen_data(noise_scale=2, zero_mean=False, N=1000):
     """Generate some testing data.
 

@@ -23,11 +23,12 @@ class CovEstimator(object):
     def update(self, X):
         return self.copy()
 
-    def inv_dot(self):
+    def inv_dot(self, P):
         raise NotImplemented('This function must be implemented in a subclass')
 
-    def loo_inv_dot(self):
-        raise NotImplemented('This function must be implemented in a subclass')
+    def loo_inv_dot(self, X, Ps):
+        for X_, P in zip(loo(X), Ps):
+            yield self.inv_dot(X_, P)
 
     def get_x0(self):
         return []
@@ -37,6 +38,21 @@ class CovEstimator(object):
 
     def copy(self):
         return deepcopy(self)
+
+
+class Function(CovEstimator):
+    """Estimate covariance using a user specified function."""
+    def __init__(self, func):
+        self.func = func
+
+    def fit(self, X, y=None):
+        return self
+
+    def inv_dot(self, X, P):
+        return pinv(self.func(X)).dot(P)
+
+    def __repr__(self):
+        return 'Function({})'.format(self.func)
 
 
 class Empirical(CovEstimator):
@@ -52,28 +68,14 @@ class Empirical(CovEstimator):
 
     def loo_inv_dot(self, X, Ps):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
-        for x, P in zip(X, Ps):
+        for X_, P in zip(X, Ps):
             # Update cov_inv using Sherman–Morrison formula
-            tmp = self.cov_inv @ x[:, np.newaxis]
-            cov_inv = self.cov_inv + (tmp @ tmp.T) / (1 - x @ tmp)
+            tmp = self.cov_inv @ X_[:, np.newaxis]
+            cov_inv = self.cov_inv + (tmp @ tmp.T) / (1 - X_ @ tmp)
             yield cov_inv @ P
 
     def __repr__(self):
         return 'Empirical()'
-
-
-class Function(Empirical):
-    """Estimate covariance using a user specified function."""
-    def __init__(self, func):
-        self.func = func
-
-    def fit(self, X, y=None):
-        self.cov = self.func(X, y)
-        self.cov_inv = pinv(self.cov)
-        return self
-
-    def __repr__(self):
-        return 'Function({})'.format(self.func)
 
 
 class L2(Empirical):
@@ -262,18 +264,19 @@ class Kronecker(Empirical):
 
         X_ = X.reshape(n_samples, self.outer_size, self.inner_size)
         X_ = X_.transpose(1, 0, 2).reshape(-1, n_samples * self.inner_size)
-        self.outer_mat_ = X_.dot(X_.T) / self.inner_size
-        self.diag_loading = np.trace(self.outer_mat_) / self.outer_size
-        self.cov = X.dot(X.T)
+        self.outer_mat_ = X_.dot(X_.T)
+        self.diag_loading = np.trace(self.outer_mat_) / (self.outer_size * self.inner_size)
+        self.cov = X.T.dot(X)
         self._perform_shrinkage()
+        self.cov_inv = pinv(self.cov_reg)
         return self
 
     def _perform_shrinkage(self):
-        """Perform shrinkage."""
-        outer_reg = (1 - self.alpha) * self.beta * self.outer_mat_
-        outer_reg.flat[::self.outer_size + 1] += self.alpha * self.diag_loading
-        self.cov_reg = self._kronecker_dot(
-            outer_reg, (1 - self.alpha) * (1 - self.beta) * self.cov)
+        """Perform Kronecker shrinkage."""
+        self.cov_reg = self.beta * np.kron(self.outer_mat_, np.eye(self.inner_size))
+        self.cov_reg += (1 - self.beta) * self.cov
+        self.cov_reg *= (1 - self.alpha)
+        self.cov_reg.flat[::len(self.cov_reg) + 1] += self.alpha * self.diag_loading
 
     def update(self, X, alpha=None, beta=None):
         if self.outer_mat_ is None:
@@ -289,7 +292,12 @@ class Kronecker(Empirical):
         k.diag_loading = self.diag_loading
         k.cov = self.cov
         k._perform_shrinkage()
+        k.cov_inv = pinv(k.cov_reg)
         return k
+
+    def _kronecker_dot(self, A, B):
+        result = A.dot(B.reshape(self.outer_size, -1))
+        return result.reshape(B.shape)
 
     def get_x0(self):
         return [self.alpha, self.beta]
@@ -346,9 +354,12 @@ class _InversionLemma(CovEstimator):
         Gs = loo(self.G, axis=1)
         K_invs = loo_kern_inv(self.K)
 
-        for G, K_inv, X, P in zip(Gs, K_invs, Xs, Ps):
-            A_inv_P = self.A_inv * P
-            yield A_inv_P - multi_dot((G, K_inv, X, A_inv_P))
+        for G, K_inv, X_, x, P in zip(Gs, K_invs, Xs, X, Ps):
+            A_inv_loo = self.A_inv
+            if self.scale_by_var:
+                A_inv_loo /= 1 - x.dot(x) / (X.shape[1] * self.mean_var)
+            A_inv_P = A_inv_loo * P
+            yield A_inv_P - multi_dot((G, K_inv, X_, A_inv_P))
 
 
 class L2Kernel(_InversionLemma):
@@ -375,8 +386,8 @@ class L2Kernel(_InversionLemma):
     def compute_AB_parts(self, X):
         A_inv = 1 / self.alpha
         if self.scale_by_var:
-            mean_var = np.sum(X ** 2) / X.shape[1]
-            A_inv /= mean_var
+            self.mean_var = np.sum(X ** 2) / X.shape[1]
+            A_inv /= self.mean_var
         B = X.T
         return A_inv, B
 
@@ -410,11 +421,12 @@ class ShrinkageKernel(_InversionLemma):
         if alpha < 1E-15:
             raise ValueError('alpha must be greater than zero')
         self.alpha = alpha
+        self.scale_by_var = True  # Always True for shrinkage regularization
 
     def compute_AB_parts(self, X):
         A_inv = 1 / self.alpha
-        mean_var = np.sum(X ** 2) / X.shape[1]
-        A_inv /= mean_var
+        self.mean_var = np.sum(X ** 2) / X.shape[1]
+        A_inv /= self.mean_var
         B = (1 - self.alpha) * X.T
         return A_inv, B
 
@@ -496,8 +508,8 @@ class KroneckerKernel(_InversionLemma):
 
         X_ = X.reshape(n_samples, self.outer_size, self.inner_size)
         X_ = X_.transpose(1, 0, 2).reshape(-1, n_samples * self.inner_size)
-        self.outer_mat_ = X_.dot(X_.T) / self.inner_size
-        self.diag_loading = np.trace(self.outer_mat_) / self.outer_size
+        self.outer_mat_ = X_.dot(X_.T) # / self.inner_size
+        self.diag_loading = np.trace(self.outer_mat_) / (self.outer_size * self.inner_size)
 
         self._compute_kernel(X)
         return self
@@ -542,9 +554,9 @@ class KroneckerKernel(_InversionLemma):
         Gs = loo(self.G, axis=1)
         K_invs = loo_kern_inv(self.K)
 
-        for G, K_inv, X, P in zip(Gs, K_invs, Xs, Ps):
+        for G, K_inv, X_, P in zip(Gs, K_invs, Xs, Ps):
             A_inv_P = self._kronecker_dot(self.A_inv, P)
-            yield A_inv_P - multi_dot((G, K_inv, X, A_inv_P))
+            yield A_inv_P - multi_dot((G, K_inv, X_, A_inv_P))
 
     def _kronecker_dot(self, A, B):
         result = A.dot(B.reshape(self.outer_size, -1))
