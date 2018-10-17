@@ -328,9 +328,17 @@ class WorkbenchOptimizer(Workbench):
                 args[n_cov_params + n_pat_modifier_params:].tolist()
             )
 
+            if cov_params in cache:
+                # Cache hit
+                cov = cache[cov_params]
+            else:
+                # Cache miss, compute values and store in cache
+                cov = self.cov.update(X, *cov_params)
+                cache[cov_params] = cov
+
             y_hat = self.loo(
-                X, y, Ps, Ns, cov_params, pattern_modifier_params,
-                normalizer_modifier_params, cache
+                X, y, Ps, Ns, cov, pattern_modifier_params,
+                normalizer_modifier_params,
             )
 
             score = scorer(identity_estimator, y_hat.ravel(), y.ravel())
@@ -407,16 +415,9 @@ class WorkbenchOptimizer(Workbench):
 
         return Ps, Ns
 
-    def loo(self, X, y, Ps, Ns, cov_params, pattern_modifier_params,
-            normalizer_modifier_params, cache):
-        if cov_params in cache:
-            # Cache hit
-            cov = cache[cov_params]
-        else:
-            # Cache miss, compute values and store in cache
-            cov = self.cov.update(X, *cov_params)
-            cache[cov_params] = cov
-
+    def loo(self, X, y, Ps, Ns, cov, pattern_modifier_params,
+            normalizer_modifier_params):
+        """Compute leave-one-out values."""
         # Do leave-one-out crossvalidation
         y_hat = np.zeros_like(y, dtype=float)
         Xs = loo_utils.loo(X)
