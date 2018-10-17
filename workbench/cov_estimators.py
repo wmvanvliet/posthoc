@@ -520,7 +520,7 @@ class KroneckerKernel(_InversionLemma):
         A_inv = pinv(A)
         B = (1 - self.alpha) * (1 - self.beta) * X.T
         G = self._kronecker_dot(A_inv, B)
-        K = (X @ G) * (1 - self.alpha)
+        K = X @ G
         K.flat[::len(K) + 1] += 1
 
         self.A_inv = A_inv

@@ -312,16 +312,32 @@ class TestKronecker():
         assert_allclose(kron.outer_mat_, spat_cov)
         assert_allclose(kron.cov_reg, target)
 
+    def test_fallback(self):
+        """Test whether Kronecker can fall back to Shrinkage"""
+        from sklearn import datasets
+        X, _ = datasets.make_regression(n_samples=100, n_features=10,
+                                        n_targets=1)
+        m = X.shape[1]
+        alpha = 0.5
+        target = (np.trace(X.T.dot(X)) / m) * np.eye(m)
+
+        shrink = cov_estimators.Kronecker(2, 5, alpha, 0).fit(X)
+        assert_allclose(shrink.cov, X.T.dot(X))
+        assert_allclose(shrink.cov_reg,
+                        (1 - alpha) * X.T.dot(X) + alpha * target)
+        assert_allclose(shrink.cov_inv,
+                        pinv((1 - alpha) * X.T.dot(X) + alpha * target))
+
     def test_inv_dot(self):
         """Test inv_dot method."""
         from sklearn import datasets
-        X, _ = datasets.make_regression(n_samples=100, n_features=10,
+        X, _ = datasets.make_regression(n_samples=10, n_features=10,
                                         n_targets=1)
         cov = X.T.dot(X)
         m = X.shape[1]
 
         # Compute spatial covariance
-        X_ = X.reshape(100, 2, 5).transpose(1, 0, 2).reshape(2, -1)
+        X_ = X.reshape(10, 2, 5).transpose(1, 0, 2).reshape(2, -1)
         gamma = np.trace(cov) / m
         spat_cov = X_.dot(X_.T)
 
@@ -365,7 +381,6 @@ class TestKronecker():
             target = beta * np.kron(spat_cov, np.eye(5)) + (1 - beta) * cov
             target = alpha * gamma * np.eye(m) + (1 - alpha) * target
             assert_allclose(XP, pinv(target).dot(P))
-            print('good')
 
     def test_kronecker_dot(self):
         """Test efficient Kronecker dot function."""
@@ -423,7 +438,7 @@ class TestKroneckerKernel():
         spat_cov = X_.dot(X_.T)
 
         # Compute the shrinkage target
-        alpha = 0.9
+        alpha = 0.5
         beta = 0.3
         target = beta * np.kron(spat_cov, np.eye(50)) + (1 - beta) * cov
         target = alpha * gamma * np.eye(m) + (1 - alpha) * target
@@ -440,23 +455,32 @@ class TestKroneckerKernel():
     def test_update(self):
         """Test updating the alpha parameter."""
         from sklearn import datasets
-        X, _ = datasets.make_regression(n_samples=10, n_features=1000,
+        X, _ = datasets.make_regression(n_samples=100, n_features=1000,
                                         n_targets=1)
         cov = X.T.dot(X)
         m = X.shape[1]
+
+        # Compute spatial covariance
+        X_ = X.reshape(100, 20, 50).transpose(1, 0, 2).reshape(20, -1)
         gamma = np.trace(cov) / m
-        spat_cov = X.reshape(20, -1).dot(X.reshape(20, -1).T)
-        P = np.random.randn(m, 1)
+        spat_cov = X_.dot(X_.T)
+
+        # Compute the shrinkage target
         alpha = 0.5
         beta = 0.3
-        new_alpha = 0.7
-        new_beta = 0.5
-        new_target = new_alpha * gamma * np.eye(m)
-        new_target += (1 - new_alpha)
-        new_target *= new_beta * np.kron(spat_cov, np.eye(50)) + (1 - new_beta) * cov
-        kron = cov_estimators.KroneckerKernel(20, 50, alpha, beta).fit(X)
-        kron = kron.update(X, new_alpha, new_beta)
-        assert_allclose(kron.inv_dot(X, P), pinv(new_target).dot(P))
+        target = beta * np.kron(spat_cov, np.eye(50)) + (1 - beta) * cov
+        target = alpha * gamma * np.eye(m) + (1 - alpha) * target
+
+        # First initialize KroneckerKernel with different alpha and beta
+        kron = cov_estimators.KroneckerKernel(20, 50, 0.5, 0.4).fit(X)
+        # Then update to the actual alpha and beta
+        kron = kron.update(X, alpha, beta)
+        assert_allclose(kron.outer_mat_, spat_cov)
+        assert_allclose(kron.diag_loading, gamma)
+
+        # Test the inv_dot method
+        P = np.random.randn(m, 1)
+        assert_allclose(kron.inv_dot(X, P), pinv(target).dot(P))
 
     def test_kronecker_dot(self):
         """Test efficient Kronecker dot function."""
