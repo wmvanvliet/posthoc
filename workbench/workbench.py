@@ -289,10 +289,29 @@ class WorkbenchOptimizer(Workbench):
         is unbounded in that direction. By default, all parameters are
         considered unbounded.
     optimizer_options : dict | None
-        A dictionary with extra options to supply to the L-BFGS-S algorithm.
-        See
-        `https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html`_
+        A dictionary with extra options to supply to the L-BFGS-S algorithm. See
+        https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html.http://scikit-learn.org/stable/modules/model_evaluation.html
         for a list of parameters.
+    loo_patterns_method : 'auto' | 'traditional' | 'kernel'
+        Method for computing the pattern matrix for the leave-one-out inner
+        crossvalidation loop. The 'traditional' setting will compute it by
+        performing a linear regression between the output of the initial model
+        and the weight matrix, as described in [1]. The 'kernel' setting
+        will use the matrix inversion lemma to compute the patterns, which can
+        be much faster when the number of features is larger than the number of
+        training samples, at the possible loss of some precision. The default
+        'auto' setting will switch between the 'traditional' and 'kernel'
+        approaches based on the ratio between the number of features and
+        training samples.
+    scoring : str | function
+        The scoring function to use while optimizating the parameters. Can be
+        any scikit-learn scorer, see:
+        http://scikit-learn.org/stable/modules/model_evaluation.html.
+        Defaults to ``'neg_mean_squared_error'`` which causes the optimization
+        algorithm to attempt to minimize the mean-squared-error (MSE) between
+        the model output and training labels.
+    verbose : bool
+        Whether to be verbose or not. Defaults to ``True``.
 
     Attributes
     ----------
@@ -304,14 +323,14 @@ class WorkbenchOptimizer(Workbench):
         The altered pattern.
     normalizer_ : ndarray, shape (n_targets, n_targets)
         The altered normalizer.
-    '''
+    '''  # noqa
     def __init__(self, model, cov=None, cov_param_x0=None,
                  cov_param_bounds=None, pattern_modifier=None,
                  pattern_param_x0=None, pattern_param_bounds=None,
                  normalizer_modifier=None, normalizer_param_x0=None,
                  normalizer_param_bounds=None, optimizer_options=None,
-                 loo_patterns_method='auto', verbose=True,
-                 scoring='neg_mean_squared_error'):
+                 loo_patterns_method='auto', scoring='neg_mean_squared_error',
+                 verbose=True):
         Workbench.__init__(self, model, cov, pattern_modifier,
                            normalizer_modifier)
 
