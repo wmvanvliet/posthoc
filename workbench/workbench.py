@@ -225,7 +225,86 @@ def _get_opt_params(inst, x0, bounds):
 
 
 class WorkbenchOptimizer(Workbench):
-    """Experimental work in process. Don't use this yet."""
+    '''
+    Work bench for post-hoc alteration of a linear model, with optimization.
+
+    Decomposes the ``.coef_`` of a linear model into a covariance matrix, a
+    pattern and a normalizer. These components are then altered by user
+    speficied functions and the linear model is re-assembled.
+
+    In this optimizing version of the workbench, the functions speficied to
+    alter the components of the model can have free parameters. These
+    parameters will be optimized using an inner leave-one-out cross validation
+    loop, using a general purpose convex optimization algorithm (L-BFGS-B).
+
+    Parameters
+    ----------
+    model : instance of sklearn.linear_model.LinearModel
+        The linear model to alter.
+    cov : instance of CovEstimator
+        The method used to estimate the covariance. Can either be one of the
+        predefined CovEstimator objects, or a function that takes the empirical
+        covariance matrix (an ndarray of shape (n_features, n_features)) as
+        input and modifies it. If such a function is used, it must have the
+        signature: ``def cov_modifier(cov, X, y)`` and return the modified
+        covariance matrix. Defaults to `None`, which means the default
+        empirical estimator of the covariance matrix is used.
+    cov_param_x0 : tuple | None
+        The initial parameters for the covariance estimator. These parameters
+        will be optimized. Defaults to ``None``, which means the settings
+        defined in the ``CovEstimator`` object will be used.
+    cov_param_bounds : list of tuple | None
+        For each parameter for the covariance estimator, the (min, max) bounds.
+        You can set a boundary to ``None`` to indicate the parameter is
+        unbounded in that direction. By default, the settings defined in the
+        ``CovEstimator`` object will be used.
+    pattern_modifier : function | None
+        Function that takes a pattern (an ndarray of shape (n_features,
+        n_targets)) and modifies it. Must have the signature:
+        ``def pattern_modifier(pattern, X, y)``
+        and return the modified pattern. Defaults to ``None``, which means no
+        modification of the pattern.
+    pattern_param_x0 : tuple | None
+        The initial parameters for the pattern modifier function. These
+        parameters will be optimized. Defaults to ``None``, which means no
+        parameters of the pattern modifier function will be optimized.
+    pattern_param_bounds : list of tuple | None
+        For each parameter for the pattern modifier function, the (min, max)
+        bounds. You can set a boundary to ``None`` to indicate the parameter
+        is unbounded in that direction. By default, all parameters are
+        considered unbounded.
+    normalizer_modifier : function | None
+        Function that takes a normalizer (an ndarray of shape (n_targets,
+        n_targets)) and modifies it. Must have the signature:
+        ``def normalizer_modifier(normalizer, X, y, pattern, coef)``
+        and return the modified normalizer. Defaults to ``None``, which means
+        no modification of the normalizer.
+    normalizer_param_x0 : tuple | None
+        The initial parameters for the normalizer modifier function. These
+        parameters will be optimized. Defaults to ``None``, which means no
+        parameters of the normalizer modifier function will be optimized.
+    normalizer_param_bounds : list of tuple | None
+        For each parameter for the normalizer modifier function, the (min, max)
+        bounds. You can set a boundary to ``None`` to indicate the parameter
+        is unbounded in that direction. By default, all parameters are
+        considered unbounded.
+    optimizer_options : dict | None
+        A dictionary with extra options to supply to the L-BFGS-S algorithm.
+        See
+        `https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html`_
+        for a list of parameters.
+
+    Attributes
+    ----------
+    coef_ : ndarray, shape (n_targets, n_features)
+        Matrix containing the filter weights.
+    intercept_ : ndarray, shape (n_targets)
+        The intercept of the linear model.
+    pattern_ : ndarray, shape (n_features, n_targets)
+        The altered pattern.
+    normalizer_ : ndarray, shape (n_targets, n_targets)
+        The altered normalizer.
+    '''
     def __init__(self, model, cov=None, cov_param_x0=None,
                  cov_param_bounds=None, pattern_modifier=None,
                  pattern_param_x0=None, pattern_param_bounds=None,
@@ -253,6 +332,10 @@ class WorkbenchOptimizer(Workbench):
 
     def fit(self, X, y):
         """Fit the model to the data and optimize all parameters.
+
+        After fitting, the optimal parameters are available as
+        ``.cov_params_``, ``.pattern_modifier_params_`` and
+        ``.normalizer_modifier_params_``.
 
         Parameters
         ----------
@@ -336,7 +419,7 @@ class WorkbenchOptimizer(Workbench):
                 cov = self.cov.update(X, *cov_params)
                 cache[cov_params] = cov
 
-            y_hat = self.loo(
+            y_hat = self._loo(
                 X, y, Ps, Ns, cov, pattern_modifier_params,
                 normalizer_modifier_params,
             )
@@ -415,8 +498,8 @@ class WorkbenchOptimizer(Workbench):
 
         return Ps, Ns
 
-    def loo(self, X, y, Ps, Ns, cov, pattern_modifier_params,
-            normalizer_modifier_params):
+    def _loo(self, X, y, Ps, Ns, cov, pattern_modifier_params,
+             normalizer_modifier_params):
         """Compute leave-one-out values."""
         # Do leave-one-out crossvalidation
         y_hat = np.zeros_like(y, dtype=float)
@@ -429,6 +512,8 @@ class WorkbenchOptimizer(Workbench):
         for test, (coef, P, N) in enumerate(parameters):
             if coef.ndim == 1:
                 coef = coef[np.newaxis, :]
+            else:
+                coef = coef.T
             if P.ndim == 1:
                 P = P[:, np.newaxis]
             N = Ns[test]
