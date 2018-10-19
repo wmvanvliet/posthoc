@@ -420,21 +420,22 @@ class WorkbenchOptimizer(Workbench):
         """Compute leave-one-out values."""
         # Do leave-one-out crossvalidation
         y_hat = np.zeros_like(y, dtype=float)
-        Xs = loo_utils.loo(X)
-        ys = loo_utils.loo(y)
-        parameters = zip(cov.loo_inv_dot(X, Ps), Xs, ys, Ps)
-        for test, (coef, X1, y1, P) in enumerate(parameters):
-            if self.pattern_modifier is not None:
-                P = self.pattern_modifier(P, X, y, *pattern_modifier_params)
-            N = Ns[test]
-            if self.normalizer_modifier is not None:
-                N = self.normalizer_modifier(N, X, y, P, coef.T,
-                                             *normalizer_modifier_params)
-            N = np.atleast_2d(N)
+        if self.pattern_modifier is not None:
+            Ps = [self.pattern_modifier(P, X, y, *pattern_modifier_params)
+                  for P in Ps]
+            Ps = np.array(Ps)
 
+        parameters = zip(cov.loo_inv_dot(X, Ps), Ps, Ns)
+        for test, (coef, P, N) in enumerate(parameters):
             if coef.ndim == 1:
                 coef = coef[np.newaxis, :]
-
-            y_hat[test] = multi_dot((X[[test]], coef, N))
+            if P.ndim == 1:
+                P = P[:, np.newaxis]
+            N = Ns[test]
+            if self.normalizer_modifier is not None:
+                N = self.normalizer_modifier(N, X, y, P, coef,
+                                             *normalizer_modifier_params)
+            N = np.atleast_2d(N)
+            y_hat[test] = multi_dot((X[[test]], coef.T, N))
 
         return y_hat
