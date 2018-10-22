@@ -129,8 +129,7 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         else:
             self.coef_ = coef
 
-        if self.normalize:
-            self.pattern_normalized_ = pattern
+        self.pattern_normalized_ = pattern
         self.pattern_ = pattern * X_scale[:, np.newaxis]
 
         self.normalizer_ = normalizer
