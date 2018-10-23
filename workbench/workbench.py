@@ -522,12 +522,15 @@ class WorkbenchOptimizer(Workbench):
         # Do leave-one-out crossvalidation
         y_hat = np.zeros_like(y, dtype=float)
         if self.pattern_modifier is not None:
-            Ps = [self.pattern_modifier(P, X, y, *pattern_modifier_params)
-                  for P in Ps]
+            Ps = [self.pattern_modifier(P, X_, y_, *pattern_modifier_params)
+                  for P, X_, y_ in zip(Ps, loo_utils.loo(X), loo_utils.loo(y))]
             Ps = np.array(Ps)
 
-        parameters = zip(cov.loo_inv_dot(X, Ps), Ps, Ns)
-        for test, (coef, P, N) in enumerate(parameters):
+        parameters = zip(
+            cov.loo_inv_dot(X, Ps),
+            loo_utils.loo(X), loo_utils.loo(y), Ps, Ns
+        )
+        for test, (coef, X_, y_, P, N) in enumerate(parameters):
             if coef.ndim == 1:
                 coef = coef[np.newaxis, :]
             else:
@@ -536,7 +539,7 @@ class WorkbenchOptimizer(Workbench):
                 P = P[:, np.newaxis]
             N = Ns[test]
             if self.normalizer_modifier is not None:
-                N = self.normalizer_modifier(N, X, y, P, coef,
+                N = self.normalizer_modifier(N, X_, y_, P, coef,
                                              *normalizer_modifier_params)
             N = np.atleast_2d(N)
             y_hat[test] = multi_dot((X[[test]], coef.T, N))
