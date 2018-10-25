@@ -27,10 +27,11 @@ class CovEstimator(object):
         """Computes inv(cov(X)) @ P"""
         raise NotImplemented('This function must be implemented in a subclass')
 
-    def loo_inv_dot(self, X, Ps):
+    def loo_inv_dot(self, X, Ps, remove_mean=False):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
         for X_, P in zip(loo(X), Ps):
-            X_ = X_ - X_.mean(axis=0)
+            if remove_mean:
+                X_ = X_ - X_.mean(axis=0)
             yield self.fit(X_).inv_dot(X_, P)
 
     def get_x0(self):
@@ -69,7 +70,7 @@ class Empirical(CovEstimator):
         """Computes inv(cov(X)) @ P"""
         return self.cov_inv @ P
 
-    def loo_inv_dot(self, X, Ps):
+    def loo_inv_dot(self, X, Ps, remove_mean=False):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
         for X_, P in zip(X, Ps):
             # Update cov_inv using Sherman–Morrison formula
@@ -348,6 +349,7 @@ class _InversionLemma(CovEstimator):
     def fit(self, X):
         A_inv, B = self.compute_AB_parts(X)
         G = A_inv * B
+        print(G)
         K = X @ G
         K.flat[::len(K) + 1] += 1
 
@@ -363,16 +365,19 @@ class _InversionLemma(CovEstimator):
         A_inv_P = self.A_inv * P
         return A_inv_P - multi_dot((self.G, self.K_inv, X, A_inv_P))
 
-    def loo_inv_dot(self, X, Ps):
+    def loo_inv_dot(self, X, Ps, remove_mean=False):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
         Xs = loo(X)
         Gs = loo(self.G, axis=1)
         K_invs = loo_kern_inv(self.K)
 
         for G, K_inv, X_, x, P in zip(Gs, K_invs, Xs, X, Ps):
+            if remove_mean:
+                X_ = X_ - X_.mean(axis=0)
             A_inv_loo = self.A_inv
             if self.scale_by_var:
                 A_inv_loo /= 1 - x.dot(x) / (X.shape[1] * self.mean_var)
+            print(G)
             A_inv_P = A_inv_loo * P
             yield A_inv_P - multi_dot((G, K_inv, X_, A_inv_P))
 
@@ -563,7 +568,7 @@ class KroneckerKernel(_InversionLemma):
         A_inv_P = self._kronecker_dot(self.A_inv, P)
         return A_inv_P - multi_dot((self.G, self.K_inv, X, A_inv_P))
 
-    def loo_inv_dot(self, X, Ps):
+    def loo_inv_dot(self, X, Ps, remove_mean=False):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
         Xs = loo(X)
         Gs = loo(self.G, axis=1)
