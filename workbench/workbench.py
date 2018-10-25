@@ -85,16 +85,6 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         self : instance of Workbench
             The fitted model.
         """
-        # Fit the base model
-        self.model.fit(X, y)
-
-        if not hasattr(self.model, 'coef_'):
-            raise RuntimeError(
-                'Model does not have a `coef_` attribute after fitting. '
-                'This does not seem to be a linear model following the '
-                'Scikit-Learn API.'
-            )
-
         # Remove the offset from X and y to compute the covariance later.
         # Also normalize X if the base model did so.
         self.fit_intercept = getattr(self.model, 'fit_intercept', False)
@@ -113,6 +103,16 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         flat_y = y.ndim == 1
         if flat_y:
             y = np.atleast_2d(y).T
+
+        # Fit the base model
+        self.model.fit(X, y)
+
+        if not hasattr(self.model, 'coef_'):
+            raise RuntimeError(
+                'Model does not have a `coef_` attribute after fitting. '
+                'This does not seem to be a linear model following the '
+                'Scikit-Learn API.'
+            )
 
         # The `coef_` attribute of Scikit-Learn linear models are re-scaled
         # after normalization. Undo this re-scaling.
@@ -384,6 +384,9 @@ class WorkbenchOptimizer(Workbench):
         else:
             y_offset = 0
 
+        self.X_offset = X_offset
+        self.y_offset = y_offset
+
         n_samples, n_features = X.shape
 
         # Ensure that y is a 2D array: n_samples x n_targets
@@ -542,6 +545,16 @@ class WorkbenchOptimizer(Workbench):
                 N = self.normalizer_modifier(N, X_, y_, P, coef,
                                              *normalizer_modifier_params)
             N = np.atleast_2d(N)
-            y_hat[test] = multi_dot((X[[test]], coef.T, N))
+            new_coef = coef.T.dot(N)
 
+            # LOO intercept correction
+            Xtest = X[[test]]
+            new_offset = 0
+            if self.fit_intercept:
+                new_offset = (X_ + self.X_offset).mean(axis=0)
+                Xtest = Xtest + self.X_offset
+                new_offset = -np.dot(new_offset, new_coef)
+                if isinstance(self.model, RegressorMixin):
+                    new_offset += (y_ + self.y_offset).mean(axis=0)
+            y_hat[test] = np.dot(Xtest, new_coef) + new_offset
         return y_hat

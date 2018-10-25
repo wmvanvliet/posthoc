@@ -30,6 +30,7 @@ class CovEstimator(object):
     def loo_inv_dot(self, X, Ps):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
         for X_, P in zip(loo(X), Ps):
+            X_ = X_ - X_.mean(axis=0)
             yield self.fit(X_).inv_dot(X_, P)
 
     def get_x0(self):
