@@ -1,4 +1,5 @@
-A workbench for linear models. See a work in progress document: [workbench.pdf](doc/workbench.pdf)
+A workbench for linear models.
+For documentation, see: https://users.aalto.fi/~vanvlm1/workbench/
 
 # Installation
 
