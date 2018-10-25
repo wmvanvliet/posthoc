@@ -130,7 +130,7 @@ html_theme_options = {
     'navbar_links': [
         ("Examples", "auto_examples/index"),
         ("API", "api"),
-        ("GitLab", "https://version.aalto.fi/gitlab/vanvlm1/workbench", True)
+        ("Github", "https://github.com/wmvanvliet/workbench", True)
     ],
     'bootswatch_theme': "united"
 }
