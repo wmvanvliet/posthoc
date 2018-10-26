@@ -349,7 +349,6 @@ class _InversionLemma(CovEstimator):
     def fit(self, X):
         A_inv, B = self.compute_AB_parts(X)
         G = A_inv * B
-        print(G)
         K = X @ G
         K.flat[::len(K) + 1] += 1
 
@@ -373,11 +372,12 @@ class _InversionLemma(CovEstimator):
 
         for G, K_inv, X_, x, P in zip(Gs, K_invs, Xs, X, Ps):
             if remove_mean:
-                X_ = X_ - X_.mean(axis=0)
+                offset = X_.mean(axis=0)
+                X_ = X_ - offset
+                G = G - self.A_inv * offset[:, np.newaxis]
             A_inv_loo = self.A_inv
             if self.scale_by_var:
                 A_inv_loo /= 1 - x.dot(x) / (X.shape[1] * self.mean_var)
-            print(G)
             A_inv_P = A_inv_loo * P
             yield A_inv_P - multi_dot((G, K_inv, X_, A_inv_P))
 
