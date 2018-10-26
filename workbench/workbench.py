@@ -289,7 +289,9 @@ class WorkbenchOptimizer(Workbench):
         considered unbounded.
     random_search : int
         Number of random sets of parameters to try, before picking the best set
-        to use as starting point for the L-BFGS-S algorithm. Defaults to 10.
+        to use as starting point for the L-BFGS-S algorithm. Set to 0 to
+        disable the random search and use the specified x0 instead.
+        Defaults to 0.
     optimizer_options : dict | None
         A dictionary with extra options to supply to the L-BFGS-S algorithm. See
         https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html.http://scikit-learn.org/stable/modules/model_evaluation.html
@@ -334,7 +336,7 @@ class WorkbenchOptimizer(Workbench):
                  cov_param_bounds=None, pattern_modifier=None,
                  pattern_param_x0=None, pattern_param_bounds=None,
                  normalizer_modifier=None, normalizer_param_x0=None,
-                 normalizer_param_bounds=None, random_search=10,
+                 normalizer_param_bounds=None, random_search=0,
                  optimizer_options=None,
                  loo_patterns_method='auto', scoring='neg_mean_squared_error',
                  random_state=None, verbose=True):
@@ -351,6 +353,7 @@ class WorkbenchOptimizer(Workbench):
         self.verbose = verbose
         self.scoring = scoring
         self.loo_patterns_method = loo_patterns_method
+        self.random_search = random_search
 
         self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
         if optimizer_options is not None:
@@ -478,11 +481,12 @@ class WorkbenchOptimizer(Workbench):
                     x0[i] = self.random_state.uniform(*b)
             return np.array(x0)
 
-        # First, try 10 random starts
-        x0s = [random_x0() for _ in range(10)]
+        # Try different initial parameters
+        x0s = [self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0]
+        x0s += [random_x0() for _ in range(self.random_search)]
         x0s_perf = [score(x0) for x0 in x0s]
 
-        # Pick best random start
+        # Pick best initial parameters
         x0 = x0s[np.argmin(x0s_perf)]
 
         params = minimize(
