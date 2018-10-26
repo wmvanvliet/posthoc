@@ -482,7 +482,7 @@ class WorkbenchOptimizer(Workbench):
             return np.array(x0)
 
         # Try different initial parameters
-        x0s = [self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0]
+        x0s = [np.array(self.cov_param_x0 + self.pattern_param_x0 + self.normalizer_param_x0)]
         x0s += [random_x0() for _ in range(self.random_search)]
         x0s_perf = [score(x0) for x0 in x0s]
 
