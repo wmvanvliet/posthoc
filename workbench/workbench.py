@@ -287,6 +287,9 @@ class WorkbenchOptimizer(Workbench):
         bounds. You can set a boundary to ``None`` to indicate the parameter
         is unbounded in that direction. By default, all parameters are
         considered unbounded.
+    random_search : int
+        Number of random sets of parameters to try, before picking the best set
+        to use as starting point for the L-BFGS-S algorithm. Defaults to 10.
     optimizer_options : dict | None
         A dictionary with extra options to supply to the L-BFGS-S algorithm. See
         https://docs.scipy.org/doc/scipy/reference/optimize.minimize-lbfgsb.html.http://scikit-learn.org/stable/modules/model_evaluation.html
@@ -309,6 +312,10 @@ class WorkbenchOptimizer(Workbench):
         Defaults to ``'neg_mean_squared_error'`` which causes the optimization
         algorithm to attempt to minimize the mean-squared-error (MSE) between
         the model output and training labels.
+    random_state : :class:`numpy.random.RandomState` | int | None
+        Random state to use. Can either be a NumPy
+        :class:`numpy.random.RandomState` object, an integer seed or ``None``
+        to use a different seed every time. Defaults to ``None``.
     verbose : bool
         Whether to be verbose or not. Defaults to ``True``.
 
@@ -327,9 +334,10 @@ class WorkbenchOptimizer(Workbench):
                  cov_param_bounds=None, pattern_modifier=None,
                  pattern_param_x0=None, pattern_param_bounds=None,
                  normalizer_modifier=None, normalizer_param_x0=None,
-                 normalizer_param_bounds=None, optimizer_options=None,
+                 normalizer_param_bounds=None, random_search=10,
+                 optimizer_options=None,
                  loo_patterns_method='auto', scoring='neg_mean_squared_error',
-                 verbose=True):
+                 random_state=None, verbose=True):
         Workbench.__init__(self, model, cov, pattern_modifier,
                            normalizer_modifier)
 
@@ -347,6 +355,11 @@ class WorkbenchOptimizer(Workbench):
         self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
         if optimizer_options is not None:
             self.optimizer_options.update(optimizer_options)
+
+        if isinstance(random_state, np.random.RandomState):
+            self.random_state = random_state
+        else:
+            self.random_state = np.random.RandomState(random_state)
 
     def fit(self, X, y):
         """Fit the model to the data and optimize all parameters.
@@ -455,10 +468,28 @@ class WorkbenchOptimizer(Workbench):
                        normalizer_modifier_params, score))
             return -score
 
+        def random_x0():
+            x0 = (self.cov_param_x0 + self.pattern_param_x0 +
+                  self.normalizer_param_x0)
+            bounds = (self.cov_param_bounds + self.pattern_param_bounds +
+                      self.normalizer_param_bounds)
+            for i, b in enumerate(bounds):
+                if b[0] is not None and b[1] is not None:
+                    x0[i] = self.random_state.uniform(*b)
+            return np.array(x0)
+
+        # First, try 10 random starts
+        x0s = [random_x0() for _ in range(10)]
+        x0s_perf = [score(x0) for x0 in x0s]
+
+        # Pick best random start
+        x0 = x0s[np.argmin(x0s_perf)]
+
         params = minimize(
             score,
-            x0=(self.cov_param_x0 + self.pattern_param_x0 +
-                self.normalizer_param_x0),
+            #x0=(self.cov_param_x0 + self.pattern_param_x0 +
+            #    self.normalizer_param_x0),
+            x0=x0,
             method='L-BFGS-B',
             bounds=(self.cov_param_bounds + self.pattern_param_bounds +
                     self.normalizer_param_bounds),
