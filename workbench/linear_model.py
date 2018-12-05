@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from .cov_estimators import Empirical
 
 
 def compute_pattern(coef, X, return_y_hat=False):
@@ -78,8 +79,9 @@ def disassemble_modify_reassemble(coef, X, y, cov=None,
         The data.
     y : ndarray, shape (n_samples, n_targets)
         The labels. Set to `None` if there are no labels.
-    cov : instance of CovEstimator | function (cov, x, y) | none
-        The method used to estimate the covariance matrix.
+    cov : instance of CovEstimator | function (cov, x, y) | None
+        The method used to estimate the covariance matrix. If None, defaults to
+        an emperical estimate.
     pattern_modifier : function (pattern, X, y) | None
         The user supplied function that modifies the pattern.
     normalizer_modifier : function (normalizer, X, y, pattern, coef) | None
@@ -122,6 +124,10 @@ def disassemble_modify_reassemble(coef, X, y, cov=None,
     # Shortcut if no modifications are required
     if cov is pattern_modifier is normalizer_modifier is None:
         return coef, pattern, normalizer
+
+    # Use default method of cov estimation
+    if cov is None:
+        cov = Empirical()
 
     # Modify the pattern
     if pattern_modifier is not None:

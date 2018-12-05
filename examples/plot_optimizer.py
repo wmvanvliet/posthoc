@@ -11,6 +11,9 @@ the covariance matrix by applying shrinkage, modify the pattern with a Gaussian
 kernel and modify the normalizer to be "unit noise gain", meaning the weights
 all sum to 1.
 
+All parameters will be tuned using a general purpose convex minimizer
+(L-BFGS-B) with an inner leave-one-out crossvalidation loop.
+
 Author: Marijn van Vliet <w.m.vanvliet@gmail.com>
 """
 # Required imports
@@ -22,7 +25,6 @@ from workbench import (Workbench, WorkbenchOptimizer, cov_estimators,
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC
 from sklearn.utils.extmath import log_logistic
 from matplotlib import pyplot as plt
 
@@ -52,12 +54,11 @@ n_epochs, n_channels, n_samples = epochs.get_data().shape
 # (observations x targets) ``y`` matrix.
 X = epochs.get_data().reshape(len(epochs), -1)
 
-# The classification algorithm doesn't handle small values well. Convert the
-# units of X into femto-Teslas
-X *= 1E15
+# Normalize the data
+X = zscore(X, axis=0)
 
 # Create training labels, based on the event codes during the experiment.
-y = epochs.events[:, 2]
+y = epochs.events[:, [2]]
 y = y - 1.5
 y *= 2
 y = y.astype(int)
@@ -77,10 +78,11 @@ X_test, y_test = X[test_index], y[test_index]
 
 # The logistic regression model ignores observations that are close to the
 # decision boundary. The parameter `C` controls how far away observations have
-# to be in order to not be ignored. A setting of 20 means "quite far". We also
+# to be in order to not be ignored. A setting of 25 means "quite far". We also
 # specify the seed for the random number generator, so that this example
 # replicates exactly every time.
-base_model = LogisticRegression(C=20, solver='lbfgs', random_state=0)
+base_model = LogisticRegression(C=25, solver='lbfgs', random_state=0,
+                                fit_intercept=False)
 
 # Train on the training data and predict the test data.
 base_model.fit(X_train, y_train)
@@ -88,7 +90,7 @@ y_hat = base_model.predict(X_test)
 
 # How many epochs did we decode correctly?
 base_model_accuracy = accuracy_score(y_test, y_hat)
-print('Base model accuracy: %.2f%%' % (100 * base_model_accuracy))
+print('Base model accuracy:', base_model_accuracy)
 
 ###############################################################################
 # To inspect the pattern that the model has learned, we wrap the model in a
@@ -110,21 +112,31 @@ plt.title('Pattern learned by the base model')
 #
 # For starters, the template is quite noisy. The main distinctive feature
 # between the conditions should be the auditory evoked potential around 0.05
-# seconds. Let's apply post-hoc adaptation to inform the model of this, by
+# seconds.  Let's apply post-hoc adaptation to inform the model of this, by
 # multiplying the pattern with a Gaussian kernel to restrict it to a specific
 # time interval.
 
-# This is the Gaussian kernel we'll use
-kernel = norm(13, 2).pdf(np.arange(n_samples))
-kernel /= kernel.max()
-
-# The function that modifies the pattern takes as input the original pattern
-# and the training data.
-def pattern_modifier(pattern, X, y):
+# The function that modifies the pattern takes as input the original pattern,
+# the training data, and two parameters that define the center and width of the
+# Gaussian kernel.
+def pattern_modifier(pattern, X, y, center, width):
     """Multiply the pattern with a Gaussian kernel."""
     mod_pattern = pattern.reshape(n_channels, n_samples)
+    kernel = norm(center, width).pdf(np.arange(n_samples))
+    kernel /= kernel.max()
     mod_pattern = mod_pattern * kernel[np.newaxis, :]
     return mod_pattern.reshape(pattern.shape)
+
+
+###############################################################################
+# We will search for the optimal ``center`` and ``width`` parameters by using
+# an optimization algorithm. In order to select the best parameter, we must
+# define a scoring function. Let's use the same scoring function as the
+# logistic regression model: logistic loss.
+def logistic_loss_score(model, X, y):
+    """Logistic loss scoring function."""
+    y_hat = model.predict(X)
+    return np.sum(log_logistic(y * y_hat))
 
 
 ###############################################################################
@@ -137,12 +149,26 @@ def pattern_modifier(pattern, X, y):
 # normalizer such that the modified pattern passes through our model with unit
 # gain.
 
+# Define initial values for the parameters. The optimization algorithm will
+# use gradient descend using these as starting point.
+initial_center = np.searchsorted(epochs.times, 0.05)
+initial_width = 5
+
+# Define the allowed range for the parameters. The optimizer will not exceed
+# these.
+center_bounds = (5, 25)
+width_bounds = (1, 50)
+
 # Define the post-hoc model using an optimizer to fine-tune the parameters.
-optimized_model = Workbench(
+optimized_model = WorkbenchOptimizer(
     base_model,
-    cov=cov_estimators.ShrinkageKernel(1.0),
+    cov=cov_estimators.ShrinkageKernel(),
     pattern_modifier=pattern_modifier,
+    pattern_param_x0=[initial_center, initial_width],
+    pattern_param_bounds=[center_bounds, width_bounds],
     normalizer_modifier=normalizers.unit_gain,
+    scoring=logistic_loss_score,
+    verbose=False
 ).fit(X_train, y_train)
 
 # Decode the test data
@@ -155,8 +181,8 @@ y_bin[y_hat < 0] = -1
 
 # How many epochs did we decode correctly?
 optimized_model_accuracy = accuracy_score(y_test, y_bin)
-print('Base model accuracy: %.2f%%' % (100 * base_model_accuracy))
-print('Optimized model accuracy: %.2f%%' % (100 * optimized_model_accuracy))
+print('Base model accuracy:', base_model_accuracy)
+print('Optimized model accuracy:', optimized_model_accuracy)
 
 ###############################################################################
 # The post-hoc model performs better. Let's visualize the optimized pattern.

@@ -388,12 +388,15 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
         y_normalizer = loo_mean_norm(y, return_norm=False)
 
     if type(model) == LinearRegression:  # subclasses _not_ supported!
-        print('Choosing optimized code-path for LinearRegression() model.')
+        if verbose:
+            print('Choosing optimized code-path for LinearRegression() model.')
         if method == 'traditional':
-            print('Using OLS path.')
+            if verbose:
+                print('Using OLS path.')
             coef_gen = loo_ols_regression(X, y, normalize, fit_intercept)
         elif method == 'kernel':
-            print('Using kernel path.')
+            if verbose:
+                print('Using kernel path.')
             coef_gen = loo_kernel_regression(X, y, normalize, fit_intercept)
         else:
             raise ValueError('Invalid mode selected. Choose one of: '

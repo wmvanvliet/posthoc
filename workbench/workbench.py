@@ -4,7 +4,6 @@ import inspect
 
 import numpy as np
 from scipy.optimize import minimize
-from numpy.linalg import multi_dot
 
 from sklearn.base import TransformerMixin, RegressorMixin
 from sklearn.linear_model.base import LinearModel
@@ -405,11 +404,6 @@ class WorkbenchOptimizer(Workbench):
 
         n_samples, n_features = X.shape
 
-        # Ensure that y is a 2D array: n_samples x n_targets
-        flat_y = y.ndim == 1
-        if flat_y:
-            y = np.atleast_2d(y).T
-
         # Initialize the CovEstimator object
         self.cov.fit(X)
 
@@ -435,7 +429,12 @@ class WorkbenchOptimizer(Workbench):
         Ps, Ns = self._loo_patterns_normalizers(
             X, y, method=self.loo_patterns_method)
 
-        cache = dict()
+        # Ensure that y is a 2D array: n_samples x n_targets
+        flat_y = y.ndim == 1
+        if flat_y:
+            y = np.atleast_2d(y).T
+
+        cache = dict()  # Cache previously computed covariances and patterns
         self.log_ = []  # Keeps track of the tried parameters and their score
 
         def score(args):
@@ -521,19 +520,19 @@ class WorkbenchOptimizer(Workbench):
         )
 
         # Store the decomposed model as attributes, so the user may inspect it
-        if flat_y:
-            self.coef_ = coef.ravel()
-        else:
-            self.coef_ = coef
-
+        self.coef_ = coef
         if self.normalize:
             self.pattern_normalized_ = pattern
         self.pattern_ = pattern * X_scale[:, np.newaxis]
         self.normalizer_ = normalizer
 
-        # Set intercept and undo normalization
-        self._set_intercept(X_offset, y_offset, X_scale)
+        # Re-flatten if the original y was a 1-dimensional matrix
+        if flat_y:
+            self.coef_ = coef.ravel()
+            self.pattern_ = self.pattern_.ravel()
 
+        # Set intercepts
+        self._set_intercept(X_offset, y_offset, X_scale)
         self.inverse_intercept_ = X_offset - np.dot(y_offset, self.pattern_.T)
 
         return self
@@ -542,7 +541,10 @@ class WorkbenchOptimizer(Workbench):
         """Construct arrays of patterns and normalizers for each LOO iteration.
         """
         n_samples, n_features = X.shape
-        n_targets = y.shape[1]
+        if y.ndim == 1:
+            n_targets = 1
+        else:
+            n_targets = y.shape[1]
 
         Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
         Ns = np.empty((n_samples, n_targets, n_targets), dtype=np.float)
