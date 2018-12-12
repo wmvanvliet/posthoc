@@ -24,9 +24,10 @@ def _start_progress_bar(n):
 def loo(X, axis=0):
     """Generates leave-one-out selections along a given axis.
 
-    A single copy is being made of the array, all other operations are
-    performed in-place in the copy. The ordering of the items in the array is
-    not guaranteed.
+    In the first iteration, the first item is left out. In following
+    iterations, each item to leave out is replaced with the first item. This
+    allows us to only make a single copy and perform all other operations
+    in-place.
 
     Parameters
     ----------
@@ -75,6 +76,10 @@ def update_inv(X, X_inv, i, v):
         A symmetrical matrix.
     X_inv : nparray, shape (N, N)
         The inverse of X_inv.
+    i : int
+        The index of the row/column to replace.
+    v : ndarray, shape (N,)
+        The values to replace the row/column with.
 
     Returns
     -------
@@ -102,6 +107,13 @@ def loo_kern_inv(K):
     """A generator for leave-one-out crossval iterations from a kernel matrix.
 
     Returns versions of K^{-1} where the i'th row&column are removed.
+
+    In the first iteration, the first item of K is left out. In following
+    iterations, each item to leave out is replaced with the first item. This
+    allows us to only make a single copy and perform all other operations
+    in-place.
+
+    This means this function is best used in combination with :func:`loo`.
 
     Parameters
     ----------
@@ -142,9 +154,9 @@ def loo_mean_norm(X, return_norm=True):
 
     Yields
     ------
-    X_mean : float
+    X_mean : ndarray, shape (1, n_features)
         The row-wise mean for X with the i'th row removed.
-    X_norm : float (optional)
+    X_norm : ndarray, shape (1, n_features) (optional)
         The row-wise L2 norm of (X - X_mean) with the i-th row removed.
         Only returned when ``return_norm=True`` is specified.
 
@@ -168,7 +180,7 @@ def loo_mean_norm(X, return_norm=True):
             X_norm_ = np.sqrt((n * X_var - offset * (x_i - X_mean_)))
             yield X_mean_, X_norm_
         else:
-            yield X_mean
+            yield X_mean_
 
 
 def loo_ols_regression(X, y, normalize=False, fit_intercept=True):
@@ -263,27 +275,17 @@ def loo_kernel_regression(X, y, normalize=False, fit_intercept=True):
     if fit_intercept:
         # Fit the intercept by adding a column of ones to the data
         X = np.hstack((X, np.ones((n_samples, 1))))
+        print(X.shape)
 
     K = X.dot(X.T)
 
-    X1 = None
-    y1 = None
-    for i, K_i in enumerate(loo_kern_inv(K)):
-        if X1 is None or y1 is None:  # First iteration
-            X1 = X[1:].copy()
-            y1 = y[1:].copy()
-        else:
-            if i >= 2:  # Put previous rows back
-                X1[i - 2] = X[i - 1]
-                y1[i - 2] = y[i - 1]
-            X1[i - 1] = X[0]
-            y1[i - 1] = y[0]
-
-        coef = X1.T.dot(K_i).dot(y1).T
+    for K_, X_, y_ in zip(loo_kern_inv(K), loo(X), loo(y)):
+        coef = X_.T.dot(K_).dot(y_).T
 
         if fit_intercept:
             # Ignore the intercept coeficients
-            coef = coef[:, :-1]
+            print(coef[-1])
+            coef = coef[:-1]
         if normalize:
             coef /= X_scale
 

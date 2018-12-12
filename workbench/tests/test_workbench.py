@@ -2,7 +2,6 @@ from __future__ import print_function
 from __future__ import division
 
 from numpy.testing import assert_allclose
-from nose.tools import assert_true, assert_greater
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 import numpy as np
 
@@ -24,11 +23,11 @@ def test_pattern_computation():
     """Test computation of the pattern from a linear model."""
     X, y, A = gen_data(noise_scale=0)
 
-    assert_true((X.std(axis=0) != 0).all())
-    assert_true((X.mean(axis=0) != 0).all())
+    assert (X.std(axis=0) != 0).all()
+    assert (X.mean(axis=0) != 0).all()
 
-    assert_true((y.std(axis=0) != 0).all())
-    assert_true((y.mean(axis=0) != 0).all())
+    assert (y.std(axis=0) != 0).all()
+    assert (y.mean(axis=0) != 0).all()
 
     for normalize in [False, True]:
         # The base model is a simple OLS regressor
@@ -137,8 +136,8 @@ def test_post_hoc_modification():
 
     # The new regressor should perform better
     wb_score = wb.score(X[test], y[test])
-    assert_greater(wb_score, ols_score)
-    assert_greater(wb_score, 0.9)  # The new regression should be awesome
+    assert wb_score > ols_score
+    assert wb_score > 0.9  # The new regression should be awesome
 
 
 def test_workbench_optimizer():
@@ -196,5 +195,5 @@ def test_workbench_optimizer2():
     rr_score = rr.score(X[test], y[test])
 
     print('OLS:', ols_score, 'RR:', rr_score, 'WB:', wb_score)
-    assert_greater(wb_score, ols_score)
-    assert_greater(wb_score, 0.5)  # The new regression should be awesome
+    assert wb_score > ols_score
+    assert wb_score > 0.5  # The new regression should be awesome

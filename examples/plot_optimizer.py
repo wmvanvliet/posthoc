@@ -1,6 +1,6 @@
 """
-Post-hoc adaptation of linear models
-====================================
+Optimizing hyperparameters using L-BFGS-B
+=========================================
 
 This example will demonstrate how a simple linear decoder can be enhanced
 through post-hoc adaptation. This example contains the core ideas that are
@@ -23,10 +23,13 @@ import mne
 from workbench import (Workbench, WorkbenchOptimizer, cov_estimators,
                        normalizers)
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.extmath import log_logistic
 from matplotlib import pyplot as plt
+
+import warnings
+warnings.simplefilter('ignore')
 
 ###############################################################################
 # We will use the MNE sample dataset. It is an MEG recording of a participant
@@ -56,6 +59,7 @@ X = epochs.get_data().reshape(len(epochs), -1)
 
 # Normalize the data
 X = zscore(X, axis=0)
+#X *= 1E15
 
 # Create training labels, based on the event codes during the experiment.
 y = epochs.events[:, [2]]
@@ -119,11 +123,17 @@ plt.title('Pattern learned by the base model')
 # The function that modifies the pattern takes as input the original pattern,
 # the training data, and two parameters that define the center and width of the
 # Gaussian kernel.
+cache = dict()
 def pattern_modifier(pattern, X, y, center, width):
     """Multiply the pattern with a Gaussian kernel."""
     mod_pattern = pattern.reshape(n_channels, n_samples)
-    kernel = norm(center, width).pdf(np.arange(n_samples))
-    kernel /= kernel.max()
+    key = (center, width)
+    if key in cache:
+        kernel = cache[key]
+    else:
+        kernel = norm(center, width).pdf(np.arange(n_samples))
+        kernel /= kernel.max()
+        cache[key] = kernel
     mod_pattern = mod_pattern * kernel[np.newaxis, :]
     return mod_pattern.reshape(pattern.shape)
 
@@ -136,7 +146,8 @@ def pattern_modifier(pattern, X, y, center, width):
 def logistic_loss_score(model, X, y):
     """Logistic loss scoring function."""
     y_hat = model.predict(X)
-    return np.sum(log_logistic(y * y_hat))
+    #return np.sum(log_logistic(y * y_hat))
+    return roc_auc_score(y, y_hat)
 
 
 ###############################################################################
@@ -162,14 +173,16 @@ width_bounds = (1, 50)
 # Define the post-hoc model using an optimizer to fine-tune the parameters.
 optimized_model = WorkbenchOptimizer(
     base_model,
-    cov=cov_estimators.ShrinkageKernel(),
+    cov=cov_estimators.ShrinkageKernel(1.0),
+    cov_param_bounds=[(0.9, 1.0)],
     pattern_modifier=pattern_modifier,
     pattern_param_x0=[initial_center, initial_width],
     pattern_param_bounds=[center_bounds, width_bounds],
     normalizer_modifier=normalizers.unit_gain,
     scoring=logistic_loss_score,
-    verbose=False
-).fit(X_train, y_train)
+    verbose=True,
+    random_search=20,
+).fit(X, y)
 
 # Decode the test data
 y_hat = optimized_model.predict(X_test).ravel()
