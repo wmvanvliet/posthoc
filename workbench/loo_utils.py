@@ -211,6 +211,9 @@ def loo_ols_regression(X, y, normalize=False, fit_intercept=True):
         (2nd edition, 2003), page 357.
     """
     n_samples = len(X)
+    flat_y = y.ndim == 1
+    if flat_y:
+        y = y[:, np.newaxis]
 
     if normalize:
         X = (X - np.mean(X, axis=0))
@@ -243,6 +246,8 @@ def loo_ols_regression(X, y, normalize=False, fit_intercept=True):
         if normalize:
             coef /= X_scale
 
+        if flat_y:
+            coef = coef.ravel()
         yield coef
 
 
@@ -267,6 +272,9 @@ def loo_kernel_regression(X, y, normalize=False, fit_intercept=True):
         No intercept is provided.
     """
     n_samples = len(X)
+    flat_y = y.ndim == 1
+    if flat_y:
+        y = y[:, np.newaxis]
 
     if normalize:
         X = (X - np.mean(X, axis=0))
@@ -275,7 +283,6 @@ def loo_kernel_regression(X, y, normalize=False, fit_intercept=True):
     if fit_intercept:
         # Fit the intercept by adding a column of ones to the data
         X = np.hstack((X, np.ones((n_samples, 1))))
-        print(X.shape)
 
     K = X.dot(X.T)
 
@@ -284,11 +291,12 @@ def loo_kernel_regression(X, y, normalize=False, fit_intercept=True):
 
         if fit_intercept:
             # Ignore the intercept coeficients
-            print(coef[-1])
-            coef = coef[:-1]
+            coef = coef[:, :-1]
         if normalize:
             coef /= X_scale
 
+        if flat_y:
+            coef = coef.ravel()
         yield coef
 
 
@@ -421,8 +429,6 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
 
         if type(model) == LinearRegression:  # subclasses _not_ supported!
             coef = next(coef_gen)
-            if normalize:
-                coef *= X_scale
         else:
             model.fit(X_, y_)
             coef = model.coef_
@@ -433,14 +439,19 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
                     'Scikit-Learn API.'
                 )
 
+        # Redo normalization performed by the sklearn model to obtain
+        # normalized coefficients 
+        if normalize:
+            coef *= X_scale
+
+        # Compute model output
         y_hat = X_.dot(coef.T)
         if y_hat.ndim == 1:
             y_hat = y_hat[:, np.newaxis]
 
-        normalizer = y_hat.T.dot(y_hat)
-
         # Compute the pattern from the base model filter weights,
         # conforming equation 6 from Haufe2014.
+        normalizer = y_hat.T.dot(y_hat)
         pattern = multi_dot((X_.T, X_, coef.T, pinv(normalizer)))
 
         if verbose:

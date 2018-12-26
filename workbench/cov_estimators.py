@@ -25,7 +25,7 @@ class CovEstimator(object):
 
     def inv_dot(self, P):
         """Computes inv(cov(X)) @ P"""
-        raise NotImplemented('This function must be implemented in a subclass')
+        raise NotImplementedError('This function must be implemented in a subclass')
 
     def loo_inv_dot(self, X, Ps, remove_mean=False):
         """Computes inv(cov(X)) @ P in a leave-one-out scheme"""
@@ -344,7 +344,7 @@ class _InversionLemma(CovEstimator):
             https://www.stats.ox.ac.uk/~lienart/blog_linalg_invlemmas.html
     """
     def compute_AB_parts(self, X):
-        raise NotImplemented('This function must be implemented in a subclass')
+        raise NotImplementedError('This function must be implemented in a subclass')
 
     def fit(self, X):
         A_inv, B = self.compute_AB_parts(X)
@@ -528,7 +528,7 @@ class KroneckerKernel(_InversionLemma):
 
         X_ = X.reshape(n_samples, self.outer_size, self.inner_size)
         X_ = X_.transpose(1, 0, 2).reshape(-1, n_samples * self.inner_size)
-        self.outer_mat_ = X_.dot(X_.T) # / self.inner_size
+        self.outer_mat_ = X_.dot(X_.T)  # / self.inner_size
         self.diag_loading = np.trace(self.outer_mat_) / (self.outer_size * self.inner_size)
 
         self._compute_kernel(X)

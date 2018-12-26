@@ -65,14 +65,18 @@ def test_loo_patterns_from_model():
         assert_allclose(n0, n1)
 
     # Test with normalization
-    #model = Ridge(normalize=True)
-    #p0 = Workbench(model).fit(X[1:], y[1:]).pattern_normalized_
-    #p1, _ = next(loo_patterns_from_model(model, X, y, verbose=True))
-    #assert_allclose(p0, p1)
+    model = Ridge(normalize=True)
+    patterns = loo_patterns_from_model(model, X, y)
+    for train, _ in LeaveOneOut().split(X, y):
+        w = Workbench(model).fit(X[train], y[train])
+        p0, n0 = w.pattern_normalized_, w.normalizer_
+        p1, n1 = next(patterns)
+        assert_allclose(p0, p1)
+        assert_allclose(n0, n1)
 
     # Optimized path for LinearRegression
     model = LinearRegression(fit_intercept=False)
-    patterns = loo_patterns_from_model(model, X, y)
+    patterns = loo_patterns_from_model(model, X, y, verbose=True)
     for train, _ in LeaveOneOut().split(X, y):
         w = Workbench(model).fit(X[train], y[train])
         p0, n0 = w.pattern_, w.normalizer_
@@ -81,7 +85,7 @@ def test_loo_patterns_from_model():
         assert_allclose(n0, n1)
 
     model = LinearRegression(fit_intercept=True)
-    patterns = loo_patterns_from_model(model, X, y)
+    patterns = loo_patterns_from_model(model, X, y, verbose=True)
     for train, _ in LeaveOneOut().split(X, y):
         w = Workbench(model).fit(X[train], y[train])
         p0, n0 = w.pattern_, w.normalizer_
@@ -90,10 +94,14 @@ def test_loo_patterns_from_model():
         assert_allclose(n0, n1)
 
     # Test with normalization
-    #model = LinearRegression(normalize=True)
-    #p0 = Workbench(model).fit(X[1:], y[1:]).pattern_normalized_
-    #p1, _ = next(loo_patterns_from_model(model, X, y))
-    #assert_allclose(p0, p1)
+    model = LinearRegression(normalize=True)
+    patterns = loo_patterns_from_model(model, X, y, verbose=True)
+    for train, _ in LeaveOneOut().split(X, y):
+        w = Workbench(model).fit(X[train], y[train])
+        p0, n0 = w.pattern_normalized_, w.normalizer_
+        p1, n1 = next(patterns)
+        assert_allclose(p0, p1)
+        assert_allclose(n0, n1)
 
 
 def test_loo_ols_regression():
@@ -115,6 +123,14 @@ def test_loo_ols_regression():
     for X_, y_, coef_ in zip(loo(X), loo(y), coef_gen):
         assert_allclose(base.fit(X_, y_).coef_, coef_, rtol=1E-7)
 
+def test_intercept():
+    from sklearn import datasets
+    X, y = datasets.make_regression(n_samples=1000, n_features=100,
+                                    n_informative=100, n_targets=3)
+    m0 = LinearRegression(fit_intercept=True).fit(X, y)
+    m1 = LinearRegression(fit_intercept=False).fit(np.hstack((X, np.ones((len(X), 1)))), y)
+    assert_allclose(m0.coef_, m1.coef_[:, :-1])
+    assert_allclose(m0.intercept_, m1.coef_[:, -1])
 
 def test_loo_kernel_regression():
     """Test generating LOO regression coefs using kernel formulation."""

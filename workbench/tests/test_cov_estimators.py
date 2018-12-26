@@ -482,6 +482,30 @@ class TestKroneckerKernel():
         P = np.random.randn(m, 1)
         assert_allclose(kron.inv_dot(X, P), pinv(target).dot(P))
 
+    def test_loo_inv_dot(self):
+        """Test loo_inv_dot method."""
+        from sklearn import datasets
+        X, _ = datasets.make_regression(n_samples=100, n_features=1000,
+                                        n_targets=1)
+        m = X.shape[1]
+        P = np.random.randn(m, 1)
+        alpha = 0.5
+        beta = 0.3
+
+        kron = cov_estimators.KroneckerKernel(20, 50, alpha, beta).fit(X)
+        for X_, XP in zip(loo(X), kron.loo_inv_dot(X, [P] * 10)):
+            cov = X_.T.dot(X_)
+
+            # Compute spatial covariance
+            X_ = X_.reshape(99, 20, 50).transpose(1, 0, 2).reshape(20, -1)
+            gamma = np.trace(cov) / m
+            spat_cov = X_.dot(X_.T)
+
+            # Compute the shrinkage target
+            target = beta * np.kron(spat_cov, np.eye(50)) + (1 - beta) * cov
+            target = alpha * gamma * np.eye(m) + (1 - alpha) * target
+            assert_allclose(XP, pinv(target).dot(P))
+
     def test_kronecker_dot(self):
         """Test efficient Kronecker dot function."""
         outer_mat = np.random.randn(5, 5)

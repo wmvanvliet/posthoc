@@ -182,7 +182,7 @@ optimized_model = WorkbenchOptimizer(
     scoring=logistic_loss_score,
     verbose=True,
     random_search=20,
-).fit(X, y)
+).fit(X_train, y_train)
 
 # Decode the test data
 y_hat = optimized_model.predict(X_test).ravel()
