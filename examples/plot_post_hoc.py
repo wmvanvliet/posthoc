@@ -1,9 +1,9 @@
 """
-Post-hoc adaptation of linear models
+Post-hoc modification of linear models
 ====================================
 
 This example will demonstrate how a simple linear decoder can be enhanced
-through post-hoc adaptation. This example contains the core ideas that are
+through post-hoc modification. This example contains the core ideas that are
 presented in the main paper [1]_.
 
 We will start with a logistic regressor as a base model. Then, we will modify
@@ -17,8 +17,8 @@ Author: Marijn van Vliet <w.m.vanvliet@gmail.com>
 import numpy as np
 from scipy.stats import zscore, norm
 import mne
-from workbench import (Workbench, WorkbenchOptimizer, cov_estimators,
-                       normalizers)
+from posthoc import (Workbench, WorkbenchOptimizer, cov_estimators,
+                     normalizers)
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
@@ -47,7 +47,7 @@ n_epochs, n_channels, n_samples = epochs.get_data().shape
 
 ###############################################################################
 # The data is now loaded as an :class:`mne.Epochs` object. array. In order to
-# use ``sklearn`` and ``workbench`` packages effectively, we need to shape this
+# use ``sklearn`` and ``posthoc`` packages effectively, we need to shape this
 # data into a (observations x features) matrix ``X`` and corresponding
 # (observations x targets) ``y`` matrix.
 X = epochs.get_data().reshape(len(epochs), -1)
@@ -92,7 +92,7 @@ print('Base model accuracy: %.2f%%' % (100 * base_model_accuracy))
 
 ###############################################################################
 # To inspect the pattern that the model has learned, we wrap the model in a
-# :class:`workbench.Workbench` object. After fitting, this object exposes the
+# :class:`posthoc.Workbench` object. After fitting, this object exposes the
 # `.pattern_` attribute.
 base_model = Workbench(base_model).fit(X_train, y_train)
 
@@ -106,11 +106,11 @@ plt.title('Pattern learned by the base model')
 
 
 ###############################################################################
-# Post-hoc adaptation can be used to improve the model somewhat.
+# Post-hoc modification can be used to improve the model somewhat.
 #
 # For starters, the template is quite noisy. The main distinctive feature
 # between the conditions should be the auditory evoked potential around 0.05
-# seconds. Let's apply post-hoc adaptation to inform the model of this, by
+# seconds. Let's apply post-hoc modification to inform the model of this, by
 # multiplying the pattern with a Gaussian kernel to restrict it to a specific
 # time interval.
 

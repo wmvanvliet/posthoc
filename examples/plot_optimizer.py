@@ -20,8 +20,8 @@ Author: Marijn van Vliet <w.m.vanvliet@gmail.com>
 import numpy as np
 from scipy.stats import zscore, norm
 import mne
-from workbench import (Workbench, WorkbenchOptimizer, cov_estimators,
-                       normalizers)
+from posthoc import (Workbench, WorkbenchOptimizer, cov_estimators,
+                     normalizers)
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.linear_model import LogisticRegression
@@ -52,7 +52,7 @@ n_epochs, n_channels, n_samples = epochs.get_data().shape
 
 ###############################################################################
 # The data is now loaded as an :class:`mne.Epochs` object. array. In order to
-# use ``sklearn`` and ``workbench`` packages effectively, we need to shape this
+# use ``sklearn`` and ``posthoc`` packages effectively, we need to shape this
 # data into a (observations x features) matrix ``X`` and corresponding
 # (observations x targets) ``y`` matrix.
 X = epochs.get_data().reshape(len(epochs), -1)
@@ -98,7 +98,7 @@ print('Base model accuracy:', base_model_accuracy)
 
 ###############################################################################
 # To inspect the pattern that the model has learned, we wrap the model in a
-# :class:`workbench.Workbench` object. After fitting, this object exposes the
+# :class:`posthoc.Workbench` object. After fitting, this object exposes the
 # `.pattern_` attribute.
 base_model = Workbench(base_model).fit(X_train, y_train)
 

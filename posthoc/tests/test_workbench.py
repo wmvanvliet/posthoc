@@ -5,8 +5,8 @@ from numpy.testing import assert_allclose
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 import numpy as np
 
-from workbench import Workbench, WorkbenchOptimizer, cov_estimators
-from workbench.utils import gen_data
+from posthoc import Workbench, WorkbenchOptimizer, cov_estimators
+from posthoc.utils import gen_data
 
 
 def _compare_models(wb, base, X, atol=0, rtol=1E-5):

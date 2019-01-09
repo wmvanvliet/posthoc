@@ -5,9 +5,9 @@ import numpy as np
 from numpy.testing import assert_allclose
 from numpy.linalg import pinv
 
-from workbench import cov_estimators
-from workbench.utils import gen_data
-from workbench.loo_utils import loo
+from posthoc import cov_estimators
+from posthoc.utils import gen_data
+from posthoc.loo_utils import loo
 
 
 class TestEmpirical():

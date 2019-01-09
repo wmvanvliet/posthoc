@@ -16,7 +16,7 @@ This approach is further documented in van Treder et al. 2016 [1]_.
 ###############################################################################
 # First, some required Python modules and loading the data:
 import mne
-from workbench import Beamformer
+from posthoc import Beamformer
 from matplotlib import pyplot as plt
 
 path = mne.datasets.sample.data_path()
@@ -49,7 +49,7 @@ templates = [template_left, template_right, template_contrast]
 
 
 ###############################################################################
-# The ``workbench`` package uses a scikit-learn style API. We must translate
+# The ``posthoc`` package uses a scikit-learn style API. We must translate
 # the MNE-Python ``epochs`` object into scikit-learn style ``X`` and ``y``
 # matrices.
 def make_X(epochs):
@@ -66,7 +66,7 @@ X_right = make_X(epochs['right'])
 
 ###############################################################################
 # Design spatial filters using the different templates. We can give all the
-# templates at once to the :class:`workbench.Beamformer` object: it will
+# templates at once to the :class:`posthoc.Beamformer` object: it will
 # create separate filters for each template.
 beamformer = Beamformer(templates).fit(X)
 

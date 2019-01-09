@@ -6,10 +6,10 @@ from numpy.testing import assert_allclose, assert_array_equal
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.model_selection import LeaveOneOut
 
-from workbench import Workbench
-from workbench.utils import gen_data
-from workbench.loo_utils import (loo, loo_mean_norm, loo_patterns_from_model,
-                                 loo_ols_regression, loo_kernel_regression)
+from posthoc import Workbench
+from posthoc.utils import gen_data
+from posthoc.loo_utils import (loo, loo_mean_norm, loo_patterns_from_model,
+                               loo_ols_regression, loo_kernel_regression)
 
 
 def test_loo():
@@ -122,15 +122,6 @@ def test_loo_ols_regression():
     base = LinearRegression(fit_intercept=True, normalize=True)
     for X_, y_, coef_ in zip(loo(X), loo(y), coef_gen):
         assert_allclose(base.fit(X_, y_).coef_, coef_, rtol=1E-7)
-
-def test_intercept():
-    from sklearn import datasets
-    X, y = datasets.make_regression(n_samples=1000, n_features=100,
-                                    n_informative=100, n_targets=3)
-    m0 = LinearRegression(fit_intercept=True).fit(X, y)
-    m1 = LinearRegression(fit_intercept=False).fit(np.hstack((X, np.ones((len(X), 1)))), y)
-    assert_allclose(m0.coef_, m1.coef_[:, :-1])
-    assert_allclose(m0.intercept_, m1.coef_[:, -1])
 
 def test_loo_kernel_regression():
     """Test generating LOO regression coefs using kernel formulation."""

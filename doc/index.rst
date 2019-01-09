@@ -1,61 +1,13 @@
-Workbench
+Post-Hoc Modification of Linear Models
 ==========
 
 This Python package implements the post-hoc adaptation framework, as presented in van Vliet and Salmelin [1]_.
 
-The code repository for this project can be found at: https://github.com/wmvanvliet/workbench.
-
-Installation
-------------
-Workbench requires a Python (either 2.7 or 3.5+) installation with the following packages: numpy, scipy, scikit-learn. 
-
-You can either download this repository as a zip file `here <https://github.com/wmvanvliet/workbench/archive/master.zip>`_, or use the shell command:  
-``git clone https://github.com/wmvanvliet/workbench.git``.
-
-To install the workbench module, run ``python setup.py install``. To verify that everything is working correctly, you can run the test suite by running ``python -m py.test workbench/tests/*.py``.
-
-Background
-----------
-
-Linear machine learning models are a powerful tool that can "learn" a data
-transformation by being exposed to examples of input with the desired output,
-thereby forming the basis for a variety of powerful techniques for analyzing
-neuroimaging data. However, their ability to learn the desired transformation
-is limited by the quality and size of the example dataset, which in
-neuroimaging studies is often notoriously noisy and small. In these cases, it
-is desirable to fine-tune the learned linear model using domain information
-beyond the example dataset. In the presence of co-linearities in the data
-(which in neuroimaging is almost always the case), it is easier to formulate
-domain knowledge in terms of the pattern matrix [2]_ than the
-weights. For example, in a source estimation setting, the pattern matrix is the
-leadfield (i.e., forward solution) and the weight matrix is the inverse
-solution.
-
-The post-hoc adaptation framework combines the insight of Haufe et al.  that a
-pattern matrix can be computed for any linear model, with the insight from
-source estimation methods that priors that are formulated on the pattern matrix
-can be translated into priors on the weight matrix.
-
-The framework decomposes the weight matrix of a linear model into three subcomponents:
-
-1. the covariance matrix of the data, which describes the scale of the input features and their relationship
-2. the pattern matrix, which describes the signal of interest, see Haufe et al. (2014).
-3. the normalizer, which describes the scale of the result and the relationship between the outputs of the model.
-
-.. image:: images/posthoc.png
-
-Inspecting each subcomponent in isolation offers an intuitive way to gain
-insights into the functioning of the model and possible problem points.
-Importantly, we may modify each component to impose new constraints and
-incorporate domain knowledge, before recomposing the subcomponents back into a
-weight matrix. Since the decomposition-modification-recomposition cycle of the
-weight matrix takes place after the initial model has been constructed through
-a conventional machine learning algorithm, we refer to this process as
-"post-hoc modification".
+The code repository for this project can be found at: https://github.com/wmvanvliet/posthoc.
 
 Documentation
 -------------
-A good place to get started with Workbench is to read through the `examples <auto_examples/index.html>`_.
+A good place to get started with the package is to read through the `examples <auto_examples/index.html>`_.
 
 Finally, there is the `API reference <api.html>`_ documentation.
 

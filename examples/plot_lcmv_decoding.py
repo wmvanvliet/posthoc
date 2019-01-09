@@ -14,8 +14,8 @@ This approach is further documented in van Vliet et al. 2016 [1]_.
 # First, some required Python modules and loading the data:
 import numpy as np
 import mne
-from workbench import Beamformer
-from workbench.cov_estimators import ShrinkageKernel
+from posthoc import Beamformer
+from posthoc.cov_estimators import ShrinkageKernel
 from sklearn.model_selection import StratifiedKFold
 from sklearn import metrics
 from matplotlib import pyplot as plt
@@ -35,7 +35,7 @@ epochs = mne.Epochs(raw, events, event_id, tmin=-0.2, tmax=0.5,
                     baseline=(-0.2, 0), preload=True)
 
 ###############################################################################
-# The ``workbench`` package uses a scikit-learn style API. We must translate
+# The ``post-hoc`` package uses a scikit-learn style API. We must translate
 # the MNE-Python ``epochs`` object into scikit-learn style ``X`` and ``y``
 # matrices.
 X = epochs.get_data().reshape(len(epochs), -1)

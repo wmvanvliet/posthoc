@@ -6,14 +6,14 @@ if __name__ == "__main__":
     if os.path.exists('MANIFEST'):
         os.remove('MANIFEST')
 
-    setup(name='workbench',
+    setup(name='posthoc',
           maintainer='Marijn van Vliet',
           maintainer_email='w.m.vanvliet@gmail.com',
-          description='A workbench for linear models',
+          description='Post-hoc modification of linear models',
           license='BSD-3',
-          url='https://version.aalto.fi/gitlab/vanvlm1/workbench',
+          url='https://github.com/wmvanvliet/posthoc',
           version='0.1',
-          download_url='https://version.aalto.fi/gitlab/vanvlm1/workbench/repository/archive.zip?ref=master',
+          download_url='https://github.com/wmvanvliet/posthoc/archive/master.zip',
           long_description=open('README.md').read(),
           classifiers=['Intended Audience :: Science/Research',
                        'Intended Audience :: Developers',
@@ -26,5 +26,5 @@ if __name__ == "__main__":
                        'Operating System :: Unix',
                        'Operating System :: MacOS'],
           platforms='any',
-          packages=['workbench'],
+          packages=['posthoc'],
           install_requires=['numpy', 'scipy', 'scikit-learn'])

@@ -4,7 +4,7 @@
 API Documentation
 =================
 
-.. currentmodule:: workbench
+.. currentmodule:: posthoc
 
 Main classes that implement the post-hoc adaptation framework
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,7 +20,7 @@ Main classes that implement the post-hoc adaptation framework
 
 Ways of estimating the covariance matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. currentmodule:: workbench.cov_estimators
+.. currentmodule:: posthoc.cov_estimators
 .. autosummary::
    :toctree: generated/
    :template: class.rst
@@ -34,7 +34,7 @@ Ways of estimating the covariance matrix
 
 Utilities for efficient leave-one-out crossvalidation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. currentmodule:: workbench.loo_utils
+.. currentmodule:: posthoc.loo_utils
 .. autosummary::
    :toctree: generated/
    :template: function.rst

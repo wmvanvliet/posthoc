@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# workbench documentation build configuration file, created by
+# posthoc documentation build configuration file, created by
 # sphinx-quickstart on Fri Nov 24 14:06:52 2016.
 #
 # This file is execfile()d with the current directory set to its
@@ -59,7 +59,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'workbench'
+project = u'posthoc'
 copyright = u'2018, Aalto University'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -130,7 +130,7 @@ html_theme_options = {
     'navbar_links': [
         ("Examples", "auto_examples/index"),
         ("API", "api"),
-        ("Github", "https://github.com/wmvanvliet/workbench", True)
+        ("Github", "https://github.com/wmvanvliet/posthoc", True)
     ],
     'bootswatch_theme': "united"
 }
@@ -220,7 +220,7 @@ html_static_path = ['_static']
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'workbenchdoc'
+htmlhelp_basename = 'posthocdoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -242,8 +242,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'workbench.tex', u'workbench Documentation',
-     u'Marijn van Vliet and Susanna Aro', 'manual'),
+    (master_doc, 'posthoc.tex', u'Post-Hoc Documentation',
+     u'Marijn van Vliet', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -272,8 +272,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'workbench', u'workbench Documentation',
-     ['Marijn van Vliet', 'Susanna Aro'], 1)
+    (master_doc, 'posthoc', u'Post-Hoc Documentation',
+     ['Marijn van Vliet'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -286,8 +286,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'workbench', u'workbench Documentation',
-     'Marijn van Vliet', 'workbench', 'A workbench for linear models.',
+    (master_doc, 'posthoc', u'Post-Hoc Documentation',
+     'Marijn van Vliet', 'posthoc', 'Post-hoc modification for linear models.',
      'Miscellaneous'),
 ]
 
@@ -307,7 +307,7 @@ texinfo_documents = [
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {'python': ('https://docs.python.org/', None),
                        'mne': ('http://martinos.org/mne/stable/', None),
-                       'workbench': ('https://users.aalto.fi/~vanvlm1/workbench/', None),
+                       'posthoc': ('https://users.aalto.fi/~vanvlm1/posthoc/python', None),
                        'sklearn': ('http://scikit-learn.org/stable', (None, './_intersphinx/sklearn-objects.inv')),
                        }
 
