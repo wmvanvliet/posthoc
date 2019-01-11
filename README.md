@@ -58,7 +58,7 @@ Documentation
 
 A good place to get started with the package is to read through the [examples](https://users.aalto.fi/~vanvlm1/posthoc/python/auto_examples/index.html).
 
-Finally, there is the [API reference](https://users.aalto.fi/~vanvlm1/posthoc/python/api.html)_ documentation.
+Finally, there is the [API reference](https://users.aalto.fi/~vanvlm1/posthoc/python/api.html) documentation.
 
 Author of the code
 ------------------
