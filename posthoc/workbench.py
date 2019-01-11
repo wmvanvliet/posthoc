@@ -32,12 +32,11 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         The linear model to alter.
     cov : instance of CovEstimator | function | None
         The method used to estimate the covariance. Can either be one of the
-        predefined CovEstimator objects, or a function that takes the empirical
-        covariance matrix (an ndarray of shape (n_features, n_features)) as
-        input and modifies it. If such a function is used, it must have the
-        signature: ``def cov_modifier(cov, X, y)`` and return the modified
-        covariance matrix. Defaults to `None`, which means the default
-        empirical estimator of the covariance matrix is used.
+        predefined CovEstimator objects, or a function. If a function is used,
+        it must have the signature: ``def cov_modifier(cov, X, y)``, take the
+        training data as input and return a matrix that will be added to the
+        emperical covariance matrix. Defaults to `None`, which means the
+        default empirical estimator of the covariance matrix is used.
     pattern_modifier : function | None
         Function that takes a pattern (an ndarray of shape (n_features,
         n_targets)) and modifies it. Must have the signature:
@@ -241,12 +240,11 @@ class WorkbenchOptimizer(Workbench):
         The linear model to alter.
     cov : instance of CovEstimator
         The method used to estimate the covariance. Can either be one of the
-        predefined CovEstimator objects, or a function that takes the empirical
-        covariance matrix (an ndarray of shape (n_features, n_features)) as
-        input and modifies it. If such a function is used, it must have the
-        signature: ``def cov_modifier(cov, X, y)`` and return the modified
-        covariance matrix. Defaults to `None`, which means the default
-        empirical estimator of the covariance matrix is used.
+        predefined CovEstimator objects, or a function. If a function is used,
+        it must have the signature: ``def cov_modifier(cov, X, y)``, take the
+        training data as input and return a matrix that will be added to the
+        emperical covariance matrix. Defaults to `None`, which means the
+        default empirical estimator of the covariance matrix is used.
     cov_param_x0 : tuple | None
         The initial parameters for the covariance estimator. These parameters
         will be optimized. Defaults to ``None``, which means the settings
