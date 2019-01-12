@@ -15,15 +15,12 @@ Author: Marijn van Vliet <w.m.vanvliet@gmail.com>
 """
 # Required imports
 import numpy as np
-from scipy.stats import zscore, norm
+from scipy.stats import norm
 import mne
-from posthoc import (Workbench, WorkbenchOptimizer, cov_estimators,
-                     normalizers)
+from posthoc import Workbench, cov_estimators, normalizers
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC
-from sklearn.utils.extmath import log_logistic
 from matplotlib import pyplot as plt
 
 ###############################################################################
@@ -46,10 +43,10 @@ epochs = mne.Epochs(raw, events, event_id, tmin=-0.2, tmax=0.5,
 n_epochs, n_channels, n_samples = epochs.get_data().shape
 
 ###############################################################################
-# The data is now loaded as an :class:`mne.Epochs` object. array. In order to
-# use ``sklearn`` and ``posthoc`` packages effectively, we need to shape this
-# data into a (observations x features) matrix ``X`` and corresponding
-# (observations x targets) ``y`` matrix.
+# The data is now loaded as an :class:`mne.Epochs` object. In order to use the
+# ``sklearn`` and ``posthoc`` packages effectively, we need to shape this data
+# into a (observations x features) matrix ``X`` and corresponding (observations
+# x targets) ``y`` matrix.
 X = epochs.get_data().reshape(len(epochs), -1)
 
 # The classification algorithm doesn't handle small values well. Convert the
@@ -133,11 +130,11 @@ def pattern_modifier(pattern, X, y):
 # number of training observations, the kernel version of the estimator is much
 # faster. We modify the pattern using the ``pattern_modifier`` function that we
 # defined earlier, but modifying the pattern like this will affect the scaling
-# of the output. To obtain a result with a consistant scaling, we modify the
+# of the output. To obtain a result with a consistent scaling, we modify the
 # normalizer such that the modified pattern passes through our model with unit
 # gain.
 
-# Define the post-hoc model using an optimizer to fine-tune the parameters.
+# Define the post-hoc model 
 optimized_model = Workbench(
     base_model,
     cov=cov_estimators.ShrinkageKernel(1.0),
@@ -160,7 +157,6 @@ print('Optimized model accuracy: %.2f%%' % (100 * optimized_model_accuracy))
 
 ###############################################################################
 # The post-hoc model performs better. Let's visualize the optimized pattern.
-# sphinx_gallery_thumbnail_number = 2
 plt.figure()
 plt.plot(epochs.times,
          optimized_model.pattern_.reshape(n_channels, n_samples).T,
@@ -172,6 +168,9 @@ plt.title('Optimized pattern')
 ###############################################################################
 # References
 # ----------
-# .. [1] Marijn van Vliet and Riitta Salmelin. Post-hoc modification of linear
-#        models: combining machine learning with domain information to make
-#        solid inferences from noisy data. In preparation.
+# .. [1] Marijn van Vliet and Riitta Salmelin (preprint). Post-hoc modification
+#        of linear models: combining machine learning with domain information
+#        to make solid inferences from noisy data.
+#        https://www.biorxiv.org/content/early/2019/01/11/518662
+#
+# sphinx_gallery_thumbnail_number = 2
