@@ -112,9 +112,8 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
                 'Scikit-Learn API.'
             )
 
-        # The `coef_` attribute of Scikit-Learn linear models are re-scaled
-        # after normalization. Undo this re-scaling.
-        W = self.model.coef_ * X_scale
+        # Get the weight matrix
+        W = self.model.coef_
 
         # Modify the original linear model and obtain a new one
         coef, pattern, normalizer = disassemble_modify_reassemble(

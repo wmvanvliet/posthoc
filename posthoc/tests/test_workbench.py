@@ -2,7 +2,7 @@ from __future__ import print_function
 from __future__ import division
 
 from numpy.testing import assert_allclose
-from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
+from sklearn.linear_model import LinearRegression, Ridge
 import numpy as np
 
 from posthoc import Workbench, WorkbenchOptimizer, cov_estimators
@@ -67,7 +67,7 @@ def test_identity_transform():
         return normalizer
 
     # Using a modifier function
-    wb = Workbench(ols, cov=cov_estimators.Empirical(),
+    wb = Workbench(LinearRegression(), cov=cov_estimators.Empirical(),
                    pattern_modifier=pattern_modifier,
                    normalizer_modifier=normalizer_modifier)
     wb.fit(X[train], y[train])
@@ -166,34 +166,3 @@ def test_workbench_optimizer():
     rr.fit(X, y)
     assert_allclose(wbo.coef_, rr.coef_)
     assert_allclose(wbo.intercept_, rr.intercept_)
-
-
-def test_workbench_optimizer2():
-    """Test using an optimizer to fine-tune parameters."""
-    X, y, A = gen_data(noise_scale=10)
-
-    train = np.arange(5)         # Samples used as training set
-    test = np.arange(5, len(X))  # Samples used as test set
-
-    # The OLS regressor we're going to try and optimize
-    ols = LinearRegression().fit(X[train], y[train])
-    ols_score = ols.score(X[test], y[test])
-
-    def pattern_modifier(pattern, X, y, beta=0.5):
-        return (1 - beta) * pattern + beta * A
-
-    wb = WorkbenchOptimizer(LinearRegression(), cov=cov_estimators.L2(),
-                            pattern_modifier=pattern_modifier,
-                            cov_param_x0=[0.5], cov_param_bounds=[(0, 1)],
-                            pattern_param_x0=[0.5],
-                            pattern_param_bounds=[(0, 1)],
-                            scoring='r2')
-    wb.fit(X[train], y[train])
-    wb_score = wb.score(X[test], y[test])
-
-    rr = RidgeCV().fit(X[train], y[train])
-    rr_score = rr.score(X[test], y[test])
-
-    print('OLS:', ols_score, 'RR:', rr_score, 'WB:', wb_score)
-    assert wb_score > ols_score
-    assert wb_score > 0.5  # The new regression should be awesome
