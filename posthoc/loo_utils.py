@@ -429,6 +429,11 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
 
         if type(model) == LinearRegression:  # subclasses _not_ supported!
             coef = next(coef_gen)
+
+            # Redo normalization performed by the sklearn model to obtain
+            # normalized coefficients 
+            if normalize:
+                coef *= X_scale
         else:
             model.fit(X_, y_)
             coef = model.coef_
@@ -438,11 +443,6 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
                     'This does not seem to be a linear model following the '
                     'Scikit-Learn API.'
                 )
-
-        # Redo normalization performed by the sklearn model to obtain
-        # normalized coefficients 
-        if normalize:
-            coef *= X_scale
 
         # Compute model output
         y_hat = X_.dot(coef.T)

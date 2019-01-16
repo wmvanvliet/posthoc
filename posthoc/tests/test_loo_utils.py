@@ -43,7 +43,7 @@ def test_loo_mean_norm():
 
 def test_loo_patterns_from_model():
     """Test efficient generation of LOO patterns and normalizers."""
-    X, y, _ = gen_data(N=10, noise_scale=0.1)
+    X, y, A = gen_data(N=10, noise_scale=0)
 
     # Normal path
     model = Ridge(fit_intercept=False)
@@ -76,32 +76,32 @@ def test_loo_patterns_from_model():
 
     # Optimized path for LinearRegression
     model = LinearRegression(fit_intercept=False)
-    patterns = loo_patterns_from_model(model, X, y, verbose=True)
+    patterns = loo_patterns_from_model(model, X, y)
     for train, _ in LeaveOneOut().split(X, y):
         w = Workbench(model).fit(X[train], y[train])
         p0, n0 = w.pattern_, w.normalizer_
         p1, n1 = next(patterns)
-        assert_allclose(p0, p1)
-        assert_allclose(n0, n1)
+        assert_allclose(p0, p1, atol=1E-12)
+        assert_allclose(n0, n1, atol=1E-12)
 
     model = LinearRegression(fit_intercept=True)
-    patterns = loo_patterns_from_model(model, X, y, verbose=True)
+    patterns = loo_patterns_from_model(model, X, y)
     for train, _ in LeaveOneOut().split(X, y):
         w = Workbench(model).fit(X[train], y[train])
         p0, n0 = w.pattern_, w.normalizer_
         p1, n1 = next(patterns)
-        assert_allclose(p0, p1)
-        assert_allclose(n0, n1)
+        assert_allclose(p0, p1, atol=1E-12)
+        assert_allclose(n0, n1, atol=1E-12)
 
     # Test with normalization
     model = LinearRegression(normalize=True)
-    patterns = loo_patterns_from_model(model, X, y, verbose=True)
+    patterns = loo_patterns_from_model(model, X, y)
     for train, _ in LeaveOneOut().split(X, y):
         w = Workbench(model).fit(X[train], y[train])
         p0, n0 = w.pattern_normalized_, w.normalizer_
         p1, n1 = next(patterns)
-        assert_allclose(p0, p1)
-        assert_allclose(n0, n1)
+        assert_allclose(p0, p1, atol=1E-12)
+        assert_allclose(n0, n1, atol=1E-12)
 
 
 def test_loo_ols_regression():
