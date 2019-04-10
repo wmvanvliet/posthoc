@@ -44,7 +44,7 @@ Installation
 ------------
 
 Workbench requires a Python (either 2.7 or 3.5+) installation with the
-following packages: numpy, scipy, scikit-learn.
+following packages: numpy, scipy, scikit-learn, progressbar2.
 
 You can either download this repository as a zip file here, or use the shell
 command: `git clone https://github.com/wmvanvliet/posthoc.git`.

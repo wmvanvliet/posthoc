@@ -11,7 +11,6 @@ Main classes that implement the post-hoc adaptation framework
 
 
 .. autosummary::
-   :toctree: generated/
    :template: class.rst
 
     Workbench
@@ -22,7 +21,6 @@ Ways of estimating the covariance matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. currentmodule:: posthoc.cov_estimators
 .. autosummary::
-   :toctree: generated/
    :template: class.rst
 
     Empirical
@@ -36,7 +34,6 @@ Utilities for efficient leave-one-out crossvalidation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. currentmodule:: posthoc.loo_utils
 .. autosummary::
-   :toctree: generated/
    :template: function.rst
 
    loo
@@ -45,5 +42,3 @@ Utilities for efficient leave-one-out crossvalidation
    loo_ols_regression
    loo_ols_values
    loo_patterns_from_model
-    
-

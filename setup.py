@@ -27,4 +27,4 @@ if __name__ == "__main__":
                        'Operating System :: MacOS'],
           platforms='any',
           packages=['posthoc'],
-          install_requires=['numpy', 'scipy', 'scikit-learn'])
+          install_requires=['numpy', 'scipy', 'scikit-learn', 'progressbar2'])
