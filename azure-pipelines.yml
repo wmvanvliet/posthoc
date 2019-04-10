@@ -28,13 +28,13 @@ jobs:
   - script: python -m pip install --upgrade pip && pip install -r requirements.txt
     displayName: 'Install dependencies'
 
+  - script: python setup.py develop --user
+    displayName: 'Install posthoc'
+    
   - script: |
       pip install pytest
       pytest tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
-
-  - script: python setup.py develop --user
-    displayName: 'Install posthoc'
     
   - task: PublishTestResults@2
     inputs:
