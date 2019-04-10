@@ -1,3 +1,4 @@
+#encoding: utf-8
 """
 Decoding with a spatio-temporal LCMV beamformer
 ===============================================

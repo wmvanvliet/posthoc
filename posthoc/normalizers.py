@@ -1,3 +1,4 @@
+#encoding: utf-8
 from numpy.linalg import pinv, norm
 
 

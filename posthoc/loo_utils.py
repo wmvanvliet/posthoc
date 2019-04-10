@@ -1,3 +1,4 @@
+#encoding: utf-8
 """
 Tools for efficient computation of various things in a leave-one-out manner.
 """
