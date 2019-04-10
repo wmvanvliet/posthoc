@@ -33,6 +33,9 @@ jobs:
       pytest tests --doctest-modules --junitxml=junit/test-results.xml
     displayName: 'pytest'
 
+  - script: python setup.py develop --user
+    displayName: 'Install posthoc'
+    
   - task: PublishTestResults@2
     inputs:
       testResultsFiles: '**/test-results.xml'
