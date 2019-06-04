@@ -446,9 +446,9 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
                 )
 
         # Compute model output
+        if coef.ndim == 1:
+            coef = coef[np.newaxis, :]
         y_hat = X_.dot(coef.T)
-        if y_hat.ndim == 1:
-            y_hat = y_hat[:, np.newaxis]
 
         # Compute the pattern from the base model filter weights,
         # conforming equation 6 from Haufe2014.
