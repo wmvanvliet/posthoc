@@ -47,20 +47,18 @@ Example
     import numpy as np
     from posthoc import Workbench, cov_estimators, normalizers
     from sklearn.linear_model import LogisticRegressionCV
-    from sklearn.model_selection import cross_val_predict
+    from sklearn.model_selection import cross_val_score
     from sklearn.preprocessing import normalize
-    from urllib.request import urlretrieve
 
-    # Get data (EEG priming experiment) and convert to scikit-learn's X and y
-    urlretrieve('https://users.aalto.fi/~vanvlm1/posthoc/priming-epo.fif', 'priming-epo.fif')
+    # Get data (N400 priming experiment) and convert to scikit-learn's X and y
     epochs = mne.read_epochs('datasets/television_commercials/avg-epo.fif')
     X = normalize(epochs.get_data().reshape(len(epochs), -1))
     y = (epochs.metadata.FAS > 0.1).values.astype(int)
 
     # Evaluate base model: logistic regression
     base_model = LogisticRegressionCV(cv=5)
-    y_pred = cross_val_predict(base_model, X, y, cv=10)
-    print('base model accuracy:', np.mean(y == (y_pred > 0)))
+    base_accuracy = cross_val_score(base_model, X, y, cv=10).mean()
+    print('base model accuracy:', base_accuracy)
 
     # Use post-hoc modification to add domain information about the N400
     def pattern_modifier(pattern, X, y):
@@ -77,8 +75,8 @@ Example
         pattern_modifier=pattern_modifier,
         normalizer_modifier=normalizers.unit_gain,
     )
-    y_pred = cross_val_predict(optimized_model, X, y, cv=10)
-    print('optimized model accuracy:', np.mean(y == (y_pred > 0)))
+    optimized_accuracy = cross_val_score(optimized_model, X, y, cv=10).mean()
+    print('optimized model accuracy:', optimized_accuracy)
 
 Output::
 

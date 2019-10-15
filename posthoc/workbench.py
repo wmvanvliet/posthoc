@@ -103,6 +103,11 @@ class Workbench(LinearModel, TransformerMixin):
         self : instance of Workbench
             The fitted model.
         """
+        # Store the unique class labels, we need them to predict the exact
+        # class labels as were given.
+        if isinstance(self.model, ClassifierMixin):
+            self.classes_ = np.unique(y)
+
         # Remove the offset from X and y to compute the covariance later.
         # Also normalize X if the base model did so.
         self.fit_intercept = getattr(self.model, 'fit_intercept', fit_intercept)
@@ -117,11 +122,6 @@ class Workbench(LinearModel, TransformerMixin):
         else:
             y_offset = 0.
 
-        # Ensure that y is a 2D array: n_samples x n_targets
-        flat_y = y.ndim == 1
-        if flat_y:
-            y = np.atleast_2d(y).T
-
         # Fit the base model
         self.model.fit(X, y)
 
@@ -134,6 +134,12 @@ class Workbench(LinearModel, TransformerMixin):
 
         # Get the weight matrix
         W = self.model.coef_
+
+        # For the next computations, ensure that y is a 2D array:
+        # n_samples x n_targets
+        flat_y = y.ndim == 1
+        if flat_y:
+            y = np.atleast_2d(y).T
 
         # Modify the original linear model and obtain a new one
         coef, pattern, normalizer = disassemble_modify_reassemble(
@@ -189,6 +195,29 @@ class Workbench(LinearModel, TransformerMixin):
             The predicted data.
         """
         return y @ self.pattern_.T + self.inverse_intercept_
+
+    def predict(self, X):
+        """Predict using the post-hoc modified linear model.
+
+        Parameters
+        ----------
+        X : array_like or sparse matrix, shape (n_samples, n_features)
+            Samples.
+
+        Returns
+        -------
+        C : array, shape (n_samples,)
+            Returns predicted values.
+        """
+        if isinstance(self.model, ClassifierMixin):
+            scores = self._decision_function(X)
+            if len(scores.shape) == 1:
+                indices = (scores > 0).astype(np.int)
+            else:
+                indices = scores.argmax(axis=1)
+            return self.classes_[indices]
+        else:
+            return self._decision_function(X)
 
 
 def get_args(inst):
@@ -416,6 +445,11 @@ class WorkbenchOptimizer(Workbench):
         # Keep a copy of the original X and y
         X_orig, y_orig = X, y
 
+        # Store the unique class labels, we need them to predict the exact
+        # class labels as were given.
+        if isinstance(self.model, ClassifierMixin):
+            self.classes_ = np.unique(y)
+
         # Remove the offset from X and y to compute the covariance later.
         # Also normalize X if the base model did so.
         self.fit_intercept = getattr(self.model, 'fit_intercept', fit_intercept)
@@ -460,7 +494,8 @@ class WorkbenchOptimizer(Workbench):
         Ps, Ns = self._loo_patterns_normalizers(
             X, y, method=self.loo_patterns_method)
 
-        # Ensure that y is a 2D array: n_samples x n_targets
+        # For the next computations ensure that y is a 2D array:
+        # n_samples x n_targets
         flat_y = y.ndim == 1
         if flat_y:
             y = np.atleast_2d(y).T
@@ -521,8 +556,6 @@ class WorkbenchOptimizer(Workbench):
 
         params = minimize(
             score,
-            #x0=(self.cov_param_x0 + self.pattern_param_x0 +
-            #    self.normalizer_param_x0),
             x0=x0,
             method='L-BFGS-B',
             bounds=(self.cov_param_bounds + self.pattern_param_bounds +
