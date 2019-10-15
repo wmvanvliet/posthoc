@@ -1,4 +1,3 @@
-# encoding: utf-8
 """
 Some ways of modifying the pattern matrix, useful in EEG/MEG use cases.
 
@@ -23,6 +22,24 @@ class PatternModifier(object):
 
 
 class GaussianKernel(PatternModifier):
+    """
+    Multiplies the pattern with a Gaussian kernel in the time dimension.
+
+    The data that is given to the model (X) is assumed to be a flattened
+    version of a (channels x time) matrix. This modifier will reshape X and
+    apply a Gaussian kernel across the time dimension.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of time samples in the data. This is used to reshape X.
+    center : int | float
+        Time sample on which the Gaussian kernel will be centered. Can be a
+        value between two samples.
+    width : int | float
+        Width of the Gaussian kernel, measured in samples. Value does not have
+        to be an integer number of samples.
+    """
     def __init__(self, n_samples, center, width):
         self.n_samples = n_samples
         self.center = center
@@ -38,3 +55,7 @@ class GaussianKernel(PatternModifier):
         mod_pattern = pattern.reshape(-1, self.n_samples)
         mod_pattern = mod_pattern * self.kernel[np.newaxis, :]
         return mod_pattern.reshape(pattern.shape)
+
+    def __repr__(self):
+        return 'GaussianKernel(n_samples={}, center={}, width={})'.format(
+            self.n_samples, self.center, self.width)
