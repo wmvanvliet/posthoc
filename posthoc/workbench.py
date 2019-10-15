@@ -5,12 +5,12 @@ import inspect
 import numpy as np
 from scipy.optimize import minimize
 
-from sklearn.base import TransformerMixin, RegressorMixin
+from sklearn.base import TransformerMixin, RegressorMixin, ClassifierMixin
 from sklearn.linear_model.base import LinearModel
 from sklearn.metrics.scorer import check_scoring
 
 from . import loo_utils
-from .cov_estimators import CovEstimator
+from .cov_estimators import CovEstimator, Empirical
 from .linear_model import disassemble_modify_reassemble
 
 
@@ -18,7 +18,7 @@ def is_estimator(x):
     return isinstance(x, CovEstimator)
 
 
-class Workbench(LinearModel, TransformerMixin, RegressorMixin):
+class Workbench(LinearModel, TransformerMixin):
     '''
     Work bench for post-hoc alteration of a linear model.
 
@@ -63,12 +63,25 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
     '''
     def __init__(self, model, cov=None, pattern_modifier=None,
                  normalizer_modifier=None):
+        # Morph our class to be that of the base model
+        new_class = (self.__class__, LinearModel, TransformerMixin)
+        if isinstance(model, RegressorMixin):
+            new_class += (RegressorMixin,)
+        elif isinstance(model, ClassifierMixin):
+            new_class += (ClassifierMixin,)
+        else:
+            raise ValueError('Base model must identify as being a regression '
+                             'or classification model by inheriting from '
+                             'either sklearn.base.RegressorMixin or '
+                             'sklearn.base.ClassifierMixin')
+        self.__class__ = type(self.__class__.__name__, new_class, {})
+
         self.model = model
         self.cov = cov
         self.pattern_modifier = pattern_modifier
         self.normalizer_modifier = normalizer_modifier
 
-    def fit(self, X, y):
+    def fit(self, X, y, fit_intercept=False, normalize=False):
         """Fit the model to the data.
 
         Parameters
@@ -77,6 +90,13 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
             The data to fit the model to.
         y : ndarray, shape (n_features, n_targets)
             The target labels.
+        fit_intercept : bool
+            Whether to fit and remove the mean of the data before passing it to
+            the model. Defaults to False.
+        normalize : bool
+            Whether to fit and remove the standard dev. of the data before
+            passing it to the model. Can only be used when `fit_intercept=True`.
+            Defaults to False.
 
         Returns
         -------
@@ -85,8 +105,8 @@ class Workbench(LinearModel, TransformerMixin, RegressorMixin):
         """
         # Remove the offset from X and y to compute the covariance later.
         # Also normalize X if the base model did so.
-        self.fit_intercept = getattr(self.model, 'fit_intercept', False)
-        self.normalize = getattr(self.model, 'normalize', False)
+        self.fit_intercept = getattr(self.model, 'fit_intercept', fit_intercept)
+        self.normalize = getattr(self.model, 'normalize', normalize)
 
         X, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
@@ -198,11 +218,10 @@ def get_args(inst):
 
 def _get_opt_params(inst, x0, bounds):
     '''Get x0 and bounds for the optimization algorithm.'''
-    if inst is None:
-        return [], []
-
     if x0 is None:
-        if is_estimator(inst):
+        if inst is None:
+            x0 = []
+        elif is_estimator(inst):
             x0 = inst.get_x0()
 
         if x0 is None:  # is still None
@@ -210,7 +229,9 @@ def _get_opt_params(inst, x0, bounds):
             x0 = [0] * n_args
 
     if bounds is None:
-        if is_estimator(inst):
+        if inst is None:
+            bounds = []
+        elif is_estimator(inst):
             bounds = inst.get_bounds()
 
         if bounds is None:  # is still None
@@ -339,6 +360,9 @@ class WorkbenchOptimizer(Workbench):
         Workbench.__init__(self, model, cov, pattern_modifier,
                            normalizer_modifier)
 
+        if cov is None:
+            cov = Empirical()
+
         self.cov_param_x0, self.cov_param_bounds = _get_opt_params(
             cov, cov_param_x0, cov_param_bounds)
         self.pattern_param_x0, self.pattern_param_bounds = _get_opt_params(
@@ -351,16 +375,19 @@ class WorkbenchOptimizer(Workbench):
         self.loo_patterns_method = loo_patterns_method
         self.random_search = random_search
 
-        self.optimizer_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
-        if optimizer_options is not None:
-            self.optimizer_options.update(optimizer_options)
+        default_options = dict(maxiter=10, eps=1E-3, ftol=1E-6)
+        if optimizer_options is None:
+            optimizer_options = default_options
+        elif not all([key in optimizer_options for key in default_options.keys()]):
+            optimizer_options = dict(optimizer_options).update(default_options)
+        self.optimizer_options = optimizer_options
 
         if isinstance(random_state, np.random.RandomState):
             self.random_state = random_state
         else:
             self.random_state = np.random.RandomState(random_state)
 
-    def fit(self, X, y):
+    def fit(self, X, y, fit_intercept=False, normalize=False):
         """Fit the model to the data and optimize all parameters.
 
         After fitting, the optimal parameters are available as
@@ -373,6 +400,13 @@ class WorkbenchOptimizer(Workbench):
             The data to fit the model to.
         y : ndarray, shape (n_features, n_targets)
             The target labels.
+        fit_intercept : bool
+            Whether to fit and remove the mean of the data before passing it to
+            the model. Defaults to False.
+        normalize : bool
+            Whether to fit and remove the standard dev. of the data before
+            passing it to the model. Can only be used when `fit_intercept=True`.
+            Defaults to False.
 
         Returns
         -------
@@ -384,8 +418,8 @@ class WorkbenchOptimizer(Workbench):
 
         # Remove the offset from X and y to compute the covariance later.
         # Also normalize X if the base model did so.
-        self.fit_intercept = getattr(self.model, 'fit_intercept', False)
-        self.normalize = getattr(self.model, 'normalize', False)
+        self.fit_intercept = getattr(self.model, 'fit_intercept', fit_intercept)
+        self.normalize = getattr(self.model, 'normalize', normalize)
         X, y_, X_offset, y_offset, X_scale = LinearModel._preprocess_data(
             X=X, y=y, fit_intercept=self.fit_intercept,
             normalize=self.normalize, copy=True,
