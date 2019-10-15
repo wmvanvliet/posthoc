@@ -49,8 +49,10 @@ Example
     from sklearn.linear_model import LogisticRegressionCV
     from sklearn.model_selection import cross_val_predict
     from sklearn.preprocessing import normalize
+    from urllib.request import urlretrieve
 
-    # Get data (N400 priming experiment) and convert to scikit-learn's X and y
+    # Get data (EEG priming experiment) and convert to scikit-learn's X and y
+    urlretrieve('https://users.aalto.fi/~vanvlm1/posthoc/priming-epo.fif', 'priming-epo.fif')
     epochs = mne.read_epochs('datasets/television_commercials/avg-epo.fif')
     X = normalize(epochs.get_data().reshape(len(epochs), -1))
     y = (epochs.metadata.FAS > 0.1).values.astype(int)
