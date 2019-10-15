@@ -42,3 +42,12 @@ Utilities for efficient leave-one-out crossvalidation
    loo_ols_regression
    loo_ols_values
    loo_patterns_from_model
+
+Scoring functions
+~~~~~~~~~~~~~~~~~
+.. currentmodule:: posthoc.scoring
+.. autosummary::
+   :template: function.rst
+
+   correlation_score
+   logistic_loss_score

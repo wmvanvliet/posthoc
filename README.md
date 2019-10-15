@@ -42,7 +42,42 @@ To get a better understanding of the three subcomponents, check out this
 
 Example
 -------
-To be written.
+```python
+import mne
+import numpy as np
+from posthoc import Workbench, cov_estimators, normalizers
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.model_selection import cross_val_predict
+from sklearn.preprocessing import normalize
+
+# Get data (N400 priming experiment) and convert to scikit-learn's X and y
+epochs = mne.read_epochs('datasets/television_commercials/avg-epo.fif')
+X = normalize(epochs.get_data().reshape(len(epochs), -1))
+y = (epochs.metadata.FAS > 0.1).values.astype(int)
+
+# Evaluate base model: logistic regression
+base_model = LogisticRegressionCV(cv=5)
+y_pred = cross_val_predict(base_model, X, y, cv=10)
+print('base model accuracy:', np.mean(y == (y_pred > 0)))
+
+# Use post-hoc modification to add domain information about the N400
+def pattern_modifier(pattern, X, y):
+    """Modify the pattern by applying a Gaussian kernel in time domain."""
+    center, width = 24, 15  # Shape of the kernel
+    n_channels, n_samples = 32, 50  # Data dimensions
+    pattern = pattern.reshape(n_channels, n_samples)
+    kernel = np.exp(-0.5 * ((np.arange(n_samples) - center) / width) ** 2)
+    return (pattern * kernel).ravel()
+
+optimized_model = Workbench(
+    base_model,
+    cov=cov_estimators.KroneckerKernel(32, 50, alpha=0.7, beta=0.14),
+    pattern_modifier=pattern_modifier,
+    normalizer_modifier=normalizers.unit_gain,
+)
+y_pred = cross_val_predict(optimized_model, X, y, cv=10)
+print('optimized model accuracy:', np.mean(y == (y_pred > 0)))
+```
 
 Installation
 ------------
