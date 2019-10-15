@@ -78,6 +78,11 @@ optimized_model = Workbench(
 y_pred = cross_val_predict(optimized_model, X, y, cv=10)
 print('optimized model accuracy:', np.mean(y == (y_pred > 0)))
 ```
+Output:
+```
+base model accuracy: 0.73
+optimized model accuracy: 0.78
+```
 
 Installation
 ------------
