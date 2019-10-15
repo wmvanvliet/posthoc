@@ -1,6 +1,6 @@
 """
 Post-hoc modification of linear models
-====================================
+======================================
 
 This example will demonstrate how a simple linear decoder can be enhanced
 through post-hoc modification. This example contains the core ideas that are
@@ -168,9 +168,9 @@ plt.title('Optimized pattern')
 ###############################################################################
 # References
 # ----------
-# .. [1] Marijn van Vliet and Riitta Salmelin (preprint). Post-hoc modification
+# .. [1] Marijn van Vliet and Riitta Salmelin (2020). Post-hoc modification
 #        of linear models: combining machine learning with domain information
-#        to make solid inferences from noisy data.
-#        https://www.biorxiv.org/content/early/2019/01/11/518662
+#        to make solid inferences from noisy data. Neuroimage, 204, 116221.
+#        https://doi.org/10.1016/j.neuroimage.2019.116221
 #
 # sphinx_gallery_thumbnail_number = 2

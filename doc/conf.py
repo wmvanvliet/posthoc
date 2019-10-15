@@ -305,10 +305,10 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'python': ('https://docs.python.org/', None),
-                       'mne': ('http://martinos.org/mne/stable/', None),
+intersphinx_mapping = {'python': ('https://docs.python.org/3/', None),
+                       'mne': ('https://mne.tools/stable/', None),
                        'posthoc': ('https://users.aalto.fi/~vanvlm1/posthoc/python', None),
-                       'sklearn': ('http://scikit-learn.org/stable', (None, './_intersphinx/sklearn-objects.inv')),
+                       'sklearn': ('https://scikit-learn.org/stable', None),
                        }
 
 sphinx_gallery_conf = {
