@@ -2,7 +2,7 @@ Post-Hoc Modification of Linear Models
 ==========
 
 This Python package implements the post-hoc modification framework, as
-presented in [van Vliet and Salmelin](https://www.biorxiv.org/content/early/2019/01/11/518662) [1].
+presented in [van Vliet and Salmelin](https://doi.org/10.1016/j.neuroimage.2019.116221) [1].
 
 The website for this package can be found at:
 https://users.aalto.fi/~vanvlm1/posthoc/python
@@ -37,8 +37,12 @@ subcomponents:
 
 ![Explanation of the post-hoc framework](doc/images/posthoc.png)
 
+To get a better understanding of the three subcomponents, check out this
+[interactive visualization](https://users.aalto.fi/~vanvlm1/posthoc/regression.html>).
+
 Example
 -------
+To be written.
 
 Installation
 ------------
@@ -55,8 +59,12 @@ that everything is working correctly, you can run the test suite by running
 
 Documentation
 -------------
+The paper covers the theory in depth: [Vliet and Salmelin](https://doi.org/10.1016/j.neuroimage.2019.116221>) [1].
 
-A good place to get started with the package is to read through the [examples](https://users.aalto.fi/~vanvlm1/posthoc/python/auto_examples/index.html).
+For a gentle introduction to the concept of post-hoc modification and basic usage of the API, see this
+[interactive tutorial](https://mybinder.org/v2/gh/wmvanvliet/neuroscience_tutorials/master?filepath=posthoc%2Flinear_regression.ipynb).
+
+For quick guides on how to do specific things, see the [examples](https://users.aalto.fi/~vanvlm1/posthoc/python/auto_examples/index.html).
 
 Finally, there is the [API reference](https://users.aalto.fi/~vanvlm1/posthoc/python/api.html) documentation.
 
