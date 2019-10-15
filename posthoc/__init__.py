@@ -5,3 +5,4 @@ from . import utils
 from . import loo_utils
 from . import cov_estimators
 from . import normalizers
+from . import scoring
