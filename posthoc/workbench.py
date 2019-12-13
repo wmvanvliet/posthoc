@@ -63,19 +63,23 @@ class Workbench(LinearModel, TransformerMixin):
     '''
     def __init__(self, model, cov=None, pattern_modifier=None,
                  normalizer_modifier=None):
-        # Morph our class to be that of the base model
-        new_class = (self.__class__, LinearModel, TransformerMixin)
-        if isinstance(model, RegressorMixin):
-            new_class += (RegressorMixin,)
-        elif isinstance(model, ClassifierMixin):
-            new_class += (ClassifierMixin,)
-        else:
+        ## Morph our class to be that of the base model
+        #new_class = (self.__class__, LinearModel, TransformerMixin)
+        #if isinstance(model, RegressorMixin):
+        #    new_class += (RegressorMixin,)
+        #elif isinstance(model, ClassifierMixin):
+        #    new_class += (ClassifierMixin,)
+        #else:
+        #    raise ValueError('Base model must identify as being a regression '
+        #                     'or classification model by inheriting from '
+        #                     'either sklearn.base.RegressorMixin or '
+        #                     'sklearn.base.ClassifierMixin')
+        #self.__class__ = type(self.__class__.__name__, new_class, {})
+        if not isinstance(model, (RegressorMixin, ClassifierMixin)):
             raise ValueError('Base model must identify as being a regression '
                              'or classification model by inheriting from '
                              'either sklearn.base.RegressorMixin or '
                              'sklearn.base.ClassifierMixin')
-        self.__class__ = type(self.__class__.__name__, new_class, {})
-
         self.model = model
         self.cov = cov
         self.pattern_modifier = pattern_modifier
