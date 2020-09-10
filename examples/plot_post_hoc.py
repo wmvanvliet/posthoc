@@ -91,11 +91,11 @@ print('Base model accuracy: %.2f%%' % (100 * base_model_accuracy))
 # To inspect the pattern that the model has learned, we wrap the model in a
 # :class:`posthoc.Workbench` object. After fitting, this object exposes the
 # `.pattern_` attribute.
-base_model = Workbench(base_model).fit(X_train, y_train)
+pattern = Workbench(base_model).fit(X_train, y_train).pattern_
 
 # Plot the pattern
 plt.figure()
-plt.plot(epochs.times, base_model.pattern_.reshape(n_channels, n_samples).T,
+plt.plot(epochs.times, pattern.reshape(n_channels, n_samples).T,
          color='black', alpha=0.2)
 plt.xlabel('Time (s)')
 plt.ylabel('Signal (normalized units)')

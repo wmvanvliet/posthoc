@@ -356,7 +356,7 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
 
     Parameters
     ----------
-    model : instance of `sklearn.linear_model.base.LinearModel`
+    model : instance of `sklearn.linear_model.LinearModel`
         The linear model to compute the patterns for
     X : ndarray, shape (n_samples, n_features)
         The data.
