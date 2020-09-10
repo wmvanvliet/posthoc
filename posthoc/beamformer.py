@@ -1,7 +1,7 @@
 # encoding: utf-8
 import numpy as np
 from sklearn.base import TransformerMixin, RegressorMixin
-from sklearn.linear_model import LinearModel
+from sklearn.linear_model.base import LinearModel
 
 from .cov_estimators import Empirical
 

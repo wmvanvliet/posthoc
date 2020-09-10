@@ -6,7 +6,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from sklearn.base import TransformerMixin, RegressorMixin, ClassifierMixin
-from sklearn.linear_model import LinearModel
+from sklearn.linear_model.base import LinearModel
 from sklearn.metrics.scorer import check_scoring
 
 from . import loo_utils

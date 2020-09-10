@@ -148,23 +148,14 @@ model_opt = WorkbenchOptimizer(
     normalizer_modifier=normalizers.unit_gain,
     scoring=scorer,
 ).fit(X, y)
-
-
-###############################################################################
-# Let's take a look at the optimal parameters:
 shrinkage_params = model_opt.cov_params_
 pattern_params = model_opt.pattern_modifier_params_
 print('Optimal shrinkage parameters:', shrinkage_params)
 print('Optimal pattern parameters:', pattern_params)
 
 ###############################################################################
-# To evaluate the performance of the new model, you can pass the
-# :class:`WorkbenchOptimizer` object into :func:`cross_val_predict`. This would
-# cause the optimization procedure to be run during every iteration of the
-# cross-validation loop. To save time in this example, we are going to do
-# freeze the parameters before entering the model into the cross-validation
-# loop. So take this result with a grain of salt, as the hyperparameters have
-# been tuned using all data, not just the training set!
+# We can now freeze the optimal parameters and evaluate the performance of our
+# tuned model.
 model = Workbench(
     ols,
     cov=cov_estimators.ShrinkageKernel(alpha=shrinkage_params[0]),
@@ -192,4 +183,4 @@ plt.title('Pattern learned by the post-hoc model')
 #        to make solid inferences from noisy data. Neuroimage, 204, 116221.
 #        https://doi.org/10.1016/j.neuroimage.2019.116221
 #
-# sphinx_gallery_thumbnail_number = 5
+# sphinx_gallery_thumbnail_number = 3
