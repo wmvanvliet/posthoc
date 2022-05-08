@@ -23,6 +23,8 @@ from sklearn.preprocessing import normalize
 from functools import partial
 import mne
 import numpy as np
+import warnings
+warnings.simplefilter('ignore')
 
 ###############################################################################
 # We will use some data from the original publication [1]_. A participant was
@@ -99,10 +101,10 @@ plt.matshow(np.cov(X.T), cmap='magma')
 cov = cov_estimators.KroneckerKernel(outer_size=32, inner_size=60)
 
 ###############################################################################
-# To use the Kronecker shrinkage determine the optimal amount of shrinkage to
-# apply, we can wrap our linear regression model in the ``WorkbenchOptimizer``
-# class. By default, this uses heavily optimized leave-one-out cross-validation
-# with a gradient descent algorithm to find the best values.
+# To determine the optimal amount of shrinkage to apply, we can wrap our linear
+# regression model in the ``WorkbenchOptimizer`` class. By default, this uses
+# heavily optimized leave-one-out cross-validation with a gradient descent
+# algorithm to find the best values.
 
 # We're optimizing for correlation between model prediction and true FAS
 def scorer(model, X, y):
@@ -183,4 +185,4 @@ plt.title('Pattern learned by the post-hoc model')
 #        to make solid inferences from noisy data. Neuroimage, 204, 116221.
 #        https://doi.org/10.1016/j.neuroimage.2019.116221
 #
-# sphinx_gallery_thumbnail_number = 3
+# sphinx_gallery_thumbnail_number = 5
