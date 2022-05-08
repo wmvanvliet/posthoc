@@ -6,8 +6,8 @@ import numpy as np
 from scipy.optimize import minimize
 
 from sklearn.base import TransformerMixin, RegressorMixin, ClassifierMixin
-from sklearn.linear_model.base import LinearModel
-from sklearn.metrics.scorer import check_scoring
+from sklearn.linear_model._base import LinearModel
+from sklearn.metrics import check_scoring
 
 from . import loo_utils
 from .cov_estimators import CovEstimator, Empirical
@@ -18,7 +18,7 @@ def is_estimator(x):
     return isinstance(x, CovEstimator)
 
 
-class Workbench(LinearModel, TransformerMixin):
+class Workbench(LinearModel, TransformerMixin, RegressorMixin):
     '''
     Work bench for post-hoc alteration of a linear model.
 
@@ -28,7 +28,7 @@ class Workbench(LinearModel, TransformerMixin):
 
     Parameters
     ----------
-    model : instance of sklearn.linear_model.LinearModel
+    model : instance of sklearn.linear_model._base.LinearModel
         The linear model to alter.
     cov : instance of CovEstimator | function | None
         The method used to estimate the covariance. Can either be one of the
@@ -223,6 +223,34 @@ class Workbench(LinearModel, TransformerMixin):
         else:
             return self._decision_function(X)
 
+    def score(self, X, y, sample_weight=None):
+        """Evaluate performence of the model on the given test data and labels.
+
+        Depending on whether the original model was a regression or
+        classification model, return either the mean R^2 or the accuracy on the
+        given test data and labels.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Test samples.
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            True labels for `X`.
+        sample_weight : array-like of shape (n_samples,), default=None
+            Sample weights.
+        Returns
+        -------
+        score : float
+            Mean R^2 or accuracy of ``self.predict(X)`` wrt. `y`.
+        """
+        if isinstance(self.model, RegressorMixin):
+            from sklearn.metrics import r2_score
+            score_function = r2_score
+        else:
+            from sklearn.metrics import accuracy_score
+            score_function = accuracy_score
+        return score_function(y, self.predict(X), sample_weight=sample_weight)
+
 
 def get_args(inst):
     """Get the arguments of an updater or modifier function that can be
@@ -289,7 +317,7 @@ class WorkbenchOptimizer(Workbench):
 
     Parameters
     ----------
-    model : instance of sklearn.linear_model.LinearModel
+    model : instance of sklearn.linear_model._base.LinearModel
         The linear model to alter.
     cov : instance of CovEstimator
         The method used to estimate the covariance. Can either be one of the
@@ -614,8 +642,8 @@ class WorkbenchOptimizer(Workbench):
         else:
             n_targets = y.shape[1]
 
-        Ps = np.empty((n_samples, n_features, n_targets), dtype=np.float)
-        Ns = np.empty((n_samples, n_targets, n_targets), dtype=np.float)
+        Ps = np.empty((n_samples, n_features, n_targets), dtype=float)
+        Ns = np.empty((n_samples, n_targets, n_targets), dtype=float)
         patterns = loo_utils.loo_patterns_from_model(
             self.model, X, y, method=method, verbose=self.verbose)
         for i, (pattern, normalizer) in enumerate(patterns):
