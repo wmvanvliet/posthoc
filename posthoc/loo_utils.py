@@ -456,7 +456,7 @@ def loo_patterns_from_model(model, X, y, method='auto', verbose=False):
         pattern = multi_dot((X_.T, X_, coef.T, pinv(normalizer)))
 
         if verbose:
-            pbar.update(pbar.value + 1)
+            pbar.update(pbar.currval + 1)
 
         yield pattern, normalizer
     if verbose:

@@ -24,7 +24,7 @@ from matplotlib import pyplot as plt
 mne.set_log_level(False)  # Be very very quiet
 
 path = mne.datasets.sample.data_path()
-raw = mne.io.read_raw_fif(path + '/MEG/sample/sample_audvis_raw.fif',
+raw = mne.io.read_raw_fif('{path}/MEG/sample/sample_audvis_raw.fif',
                           preload=True)
 events = mne.find_events(raw)
 event_id = dict(left=1, right=2)
@@ -108,7 +108,7 @@ plt.xlabel('Epochs')
 plt.ylabel('Beamformer output')
 
 # Assign the 'left' class to values above 0 and 'right' to values below 0
-y_bin = np.zeros(len(y_hat), dtype=np.int)
+y_bin = np.zeros(len(y_hat), dtype=int)
 y_bin[y_hat >= 0] = 1
 y_bin[y_hat < 0] = 2
 
