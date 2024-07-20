@@ -27,4 +27,8 @@ if __name__ == "__main__":
                        'Operating System :: MacOS'],
           platforms='any',
           packages=['posthoc'],
-          install_requires=['numpy', 'scipy', 'scikit-learn', 'progressbar2'])
+          install_requires=['numpy', 'scipy', 'scikit-learn', 'progressbar2'],
+          project_urls={
+                       'Homepage': 'https://users.aalto.fi/~vanvlm1/posthoc/python',
+                       'Bug Reports': 'https://github.com/wmvanvliet/posthoc/issues',
+                       'Source': 'https://github.com/wmvanvliet/posthoc'})
