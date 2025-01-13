@@ -14,7 +14,7 @@ if __name__ == "__main__":
           url='https://github.com/wmvanvliet/posthoc',
           version='0.1',
           download_url='https://github.com/wmvanvliet/posthoc/archive/master.zip',
-          long_description=open('README.md').read(),
+          long_description=open('README.md', encoding="utf8").read(),
           classifiers=['Intended Audience :: Science/Research',
                        'Intended Audience :: Developers',
                        'License :: OSI Approved',
