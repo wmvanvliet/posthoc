@@ -5,7 +5,6 @@ Author: Marijn van Vliet <w.m.vanvliet@gmail.com>
 """
 import numpy as np
 from scipy.stats import pearsonr
-from sklearn.utils.extmath import log_logistic
 
 
 def logistic_loss_score(model, X, y):
@@ -24,7 +23,7 @@ def logistic_loss_score(model, X, y):
         y_hat = model.predict(X)
 
     # Minimize logistic loss
-    perf = np.sum(log_logistic(y * y_hat))
+    perf = np.sum(-np.logaddexp(0, -(y * y_hat)))
     return perf
 
 

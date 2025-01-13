@@ -26,7 +26,7 @@ class Beamformer(LinearModel, TransformerMixin, RegressorMixin):
         Whether to remove the data mean before applying the filter.
         WARNING: only set to False if the data has been pre-centered. Applying
         the filter to un-normalized data may result in inaccuracies.
-    normalize : bool (default: True)
+    normalize : bool (default: False)
         Whether to normalize (std. dev = 1) the data before fitting the
         beamformer. Can make the filter more robust.
     cov : instance of CovEstimator | function | None
